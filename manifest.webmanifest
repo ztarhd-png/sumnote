@@ -1,0 +1,16 @@
+{
+  "id": "./",
+  "name": "숨노트 — 가볍게 쓰고, 바로 합계",
+  "short_name": "숨노트",
+  "description": "글과 숫자를 자유롭게 적는 나만의 합계 노트",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f8f3",
+  "theme_color": "#f7f8f3",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
