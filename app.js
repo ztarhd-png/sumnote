@@ -32,6 +32,7 @@
   function active() { return state.notes.find(n => n.id === currentNote); }
   function total(note) { return SumParser.parseNote(note.body).total; }
   function ordered(notes) { return [...notes].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)); }
+  function icon(name) { const ns = 'http://www.w3.org/2000/svg'; const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('class', 'i'); svg.setAttribute('aria-hidden', 'true'); const use = document.createElementNS(ns, 'use'); use.setAttribute('href', '#i-' + name); svg.append(use); return svg; }
   function element(tag, className, text) { const el = document.createElement(tag); if (className) el.className = className; if (text !== undefined) el.textContent = text; return el; }
   function dateLabel(date) { return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(new Date(date)); }
   function renderNav() {
@@ -40,7 +41,7 @@
     $('folders').replaceChildren();
     for (const folder of state.folders) {
       const button = element('button', 'nav-item folder-item' + (currentFolder === folder.id ? ' active' : ''));
-      button.append(element('span', '', '▱'), element('span', 'folder-name', folder.name));
+      button.append(icon('folder'), element('span', 'folder-name', folder.name));
       button.append(element('small', '', fmt(state.notes.filter(n => n.folderId === folder.id).reduce((s, n) => s + total(n), 0))));
       button.title = folder.name + ' · 폴더 합계';
       button.onclick = () => selectFolder(folder.id);
@@ -58,7 +59,7 @@
     for (const note of ordered(matches)) {
       const card = element('button', 'note-card' + (note.id === currentNote ? ' selected' : ''));
       card.setAttribute('aria-pressed', String(note.id === currentNote));
-      const top = element('div', 'card-top'); top.append(element('span', '', '▤'), element('small', '', dateLabel(note.updatedAt)));
+      const top = element('div', 'card-top'); top.append(icon('notes'), element('small', '', dateLabel(note.updatedAt)));
       const bottom = element('div', 'card-total'); bottom.append(element('span', '', '합계'));
       const value = element('strong', '', fmt(total(note))); value.append(element('small', '', '원')); bottom.append(value);
       card.append(top, element('h3', '', note.title || '이름 없는 노트'), element('div', 'note-preview', note.body.split('\n').find(l => query ? l.toLocaleLowerCase().includes(query) : l.trim()) || '첫 줄을 적어 보세요.'), bottom);
@@ -85,7 +86,7 @@
       if (line.value !== null) { button.setAttribute('aria-label', `${i + 1}번째 줄 ${label} 복사`); button.onclick = () => copy(fmt(line.value)); }
       $('line-values').append(button);
     });
-    $('note-body').style.height = Math.max(224, parsed.lines.length * 32) + 'px';
+    $('note-body').style.height = Math.max(252, parsed.lines.length * 34) + 'px';
     $('note-total').textContent = fmt(parsed.total);
     $('valued-count').textContent = parsed.lines.filter(l => l.type === 'value').length + '개 줄을 더했어요';
   }
@@ -158,5 +159,5 @@
   currentNote = ordered(state.notes)[0]?.id || null;
   renderCards(); renderEditor();
   if (storageBroken) { $('save-status').textContent = '저장 확인 필요'; toast('기존 데이터를 읽지 못했어요. 원본 보호를 위해 자동 저장을 멈췄어요.'); } else persist();
-  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => {}); });
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(reg => reg.update()).catch(() => {}); });
 })();
