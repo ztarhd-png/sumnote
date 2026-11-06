@@ -1,7 +1,8 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const KEY = 'sumnote.data.v1';
+  const KEY = 'sumnote.data.v1', BACKUP_KEY = 'sumnote.lastBackup';
+  const VERSION = '2026.11.07'; // 배포할 때마다 날짜를 바꾸면 설정 화면에서 새 버전이 왔는지 확인할 수 있다.
   const fmt = n => new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 8 }).format(Object.is(n, -0) ? 0 : n);
   const id = () => globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2);
   const now = new Date().toISOString();
@@ -136,7 +137,12 @@
   $('search').oninput = () => { query = $('search').value.trim().toLocaleLowerCase(); renderCards(); };
   $('menu-toggle').onclick = () => { const open = $('sidebar').classList.toggle('open'); $('menu-toggle').setAttribute('aria-expanded', String(open)); };
   document.addEventListener('click', e => { if (!$('sidebar').contains(e.target) && !$('menu-toggle').contains(e.target)) { $('sidebar').classList.remove('open'); $('menu-toggle').setAttribute('aria-expanded', 'false'); } });
-  $('settings').onclick = $('examples').onclick = () => $('settings-dialog').showModal();
+  function lastBackup() { try { return localStorage.getItem(BACKUP_KEY); } catch (_) { return null; } }
+  function showAppInfo() {
+    const at = lastBackup();
+    $('app-info').textContent = `버전 ${VERSION} · 마지막 백업 ${at ? new Date(at).toLocaleDateString('ko-KR') : '없음'}`;
+  }
+  $('settings').onclick = $('examples').onclick = () => { showAppInfo(); $('settings-dialog').showModal(); };
   async function copy(text) {
     try { if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text); else { const input = element('textarea'); input.value = text; input.style.position = 'fixed'; input.style.opacity = '0'; document.body.append(input); input.select(); const ok = document.execCommand('copy'); input.remove(); if (!ok) throw Error(); } toast('복사했어요.'); }
     catch (_) { toast('복사하지 못했어요. 브라우저 권한을 확인해 주세요.'); }
@@ -145,7 +151,18 @@
   function download(content, filename, type) { const url = URL.createObjectURL(new Blob([content], { type })); const a = element('a'); a.href = url; a.download = filename; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000); }
   function safeFilename(name) { return name.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 80) || '노트'; }
   $('export-csv').onclick = () => { const n = active(); if (!n) return; const quote = s => '"' + String(s).replace(/"/g, '""') + '"'; const rows = [['원문', '값'], ...SumParser.parseNote(n.body).lines.map(l => [l.raw, l.value ?? ''])]; download('\uFEFF' + rows.map(r => r.map(quote).join(',')).join('\r\n'), safeFilename(n.title) + '.csv', 'text/csv;charset=utf-8'); };
-  $('backup').onclick = () => download(JSON.stringify(state, null, 2), '숨노트-백업-' + new Date().toISOString().slice(0, 10) + '.json', 'application/json');
+  // 아이폰에서는 공유 시트를 열어 '파일에 저장'으로 바로 보관할 수 있게 한다. 공유를 못 하면 내려받기로.
+  $('backup').onclick = async () => {
+    const name = '숨노트-백업-' + new Date().toISOString().slice(0, 10) + '.json', json = JSON.stringify(state, null, 2);
+    const done = () => { try { localStorage.setItem(BACKUP_KEY, new Date().toISOString()); } catch (_) {} showAppInfo(); };
+    const file = typeof File === 'function' ? new File([json], name, { type: 'application/json' }) : null;
+    if (file && navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: name }); done(); toast('백업 파일을 보냈어요.'); }
+      catch (error) { if (error.name !== 'AbortError') { download(json, name, 'application/json'); done(); } }
+      return;
+    }
+    download(json, name, 'application/json'); done();
+  };
   $('import-button').onclick = () => $('import-file').click();
   $('import-file').onchange = async () => {
     const file = $('import-file').files[0]; if (!file) return;
@@ -168,5 +185,7 @@
   currentNote = ordered(state.notes)[0]?.id || null;
   renderCards(); renderEditor();
   if (storageBroken) { $('save-status').textContent = '저장 확인 필요'; toast('기존 데이터를 읽지 못했어요. 원본 보호를 위해 자동 저장을 멈췄어요.'); } else persist();
+  // 저장소 공간이 부족할 때 브라우저가 이 앱의 데이터를 먼저 지우지 않도록 요청한다(지원하는 브라우저만).
+  navigator.storage?.persist?.().catch(() => {});
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(reg => reg.update()).catch(() => {}); });
 })();
