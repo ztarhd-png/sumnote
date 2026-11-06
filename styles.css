@@ -123,7 +123,7 @@ a { color: inherit; text-decoration: none; }
 .ambient span:nth-child(3) { left: 30%; bottom: 2%; width: 50vmax; height: 38vmax; background: var(--amb-3); opacity: 0.6; }
 
 /* 유리 층: 뒤의 배경색이 비쳐 보이는 곳에만 쓴다 */
-.sidebar, .topbar, .note-card, .search-box {
+.sidebar, .topbar {
   background: var(--glass);
   -webkit-backdrop-filter: saturate(180%) blur(24px);
   backdrop-filter: saturate(180%) blur(24px);
@@ -169,135 +169,129 @@ a { color: inherit; text-decoration: none; }
 .icon-button.danger:hover, .chip.danger:hover { background: var(--hold-fill); color: var(--hold); }
 
 /* ── 뼈대 ─────────────────────────────────────────── */
+/* 원칙: 본문을 넓게. 화면에는 노트 이름 · 합계 · 본문만 두고, 나머지는 왼쪽 메뉴와 '편집' 시트로 보낸다. */
 .app-shell { display: flex; min-height: 100dvh; }
 .sidebar {
   position: fixed; inset: 0 auto 0 0; z-index: 10;
-  width: 264px; flex-shrink: 0; padding: 32px 18px 22px;
-  display: flex; flex-direction: column;
+  width: 280px; flex-shrink: 0; padding: 26px 16px 18px;
+  display: flex; flex-direction: column; gap: 14px;
   box-shadow: inset -1px 0 0 var(--sep);
 }
-.brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; font-size: 21px; font-weight: 800; letter-spacing: -0.02em; }
-.brand-icon { display: block; width: 34px; height: 34px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--glass-edge), 0 2px 6px rgb(20 20 30 / 0.12); }
-.brand-caption { margin: 10px 0 26px; padding: 0 8px; font-size: 13px; color: var(--ink-3); }
-.new-note { width: 100%; margin-bottom: 30px; }
-.nav-label { padding: 0 10px; font-size: 12px; font-weight: 700; color: var(--ink-3); }
-.nav-item {
-  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; margin-top: 6px; padding: 0 12px;
-  border-radius: 14px; text-align: left; font-size: 15px; font-weight: 500; color: var(--ink);
-  transition: background-color 150ms;
-}
-.nav-item .i { color: var(--ink-2); }
-.nav-item:hover { background: var(--fill); }
-.nav-item.active { background: var(--fill-2); font-weight: 700; }
-.nav-item.active .i { color: var(--accent); }
-.nav-item .count { margin-left: auto; font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.folder-heading { display: flex; align-items: center; justify-content: space-between; margin-top: 24px; padding-right: 2px; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 0 6px; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; }
+.brand-icon { display: block; width: 30px; height: 30px; border-radius: 9px; box-shadow: inset 0 0 0 1px var(--glass-edge), 0 2px 6px rgb(20 20 30 / 0.12); }
+.new-note { width: 100%; min-height: 42px; }
+.nav-label { padding: 0 8px; font-size: 12px; font-weight: 700; color: var(--ink-3); }
+.folder-heading { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
 .folder-heading .icon-button { width: 32px; height: 32px; }
-.folder-item .folder-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.folder-item small { margin-left: auto; padding-left: 8px; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-#folders { overflow: auto; margin: 0 -4px; padding: 0 4px; }
-.sidebar-bottom { margin-top: auto; padding-top: 20px; font-size: 13px; color: var(--ink-3); }
-.local-note { display: flex; align-items: center; padding: 0 10px; }
-.local-dot { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-fill); }
-.settings-link {
-  display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 44px; margin-top: 12px; padding: 0 10px;
-  border-top: 1px solid var(--sep); border-radius: 0; font-size: 14px; font-weight: 600; color: var(--ink-2);
-}
-.settings-link > span { display: inline-flex; align-items: center; gap: 8px; }
-.settings-link:hover { background: none; color: var(--ink); }
 
-main { flex: 1; min-width: 0; margin-left: 264px; }
-.topbar {
-  position: sticky; top: 0; z-index: 5;
-  display: flex; align-items: center; gap: 12px; height: var(--topbar-h); padding: 0 40px;
-  box-shadow: inset 0 -1px 0 var(--sep);
-  font-size: 14px; color: var(--ink-2);
-}
-.topbar-title { font-weight: 600; }
-.saved { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--ok); }
-/* 새 버전이 받아져 있을 때만 보이는 작은 버튼. 저장 상태 바로 왼쪽에 붙는다. */
-.update-chip {
-  display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
-  height: 28px; padding: 0 12px; border: 0; border-radius: 999px;
-  background: rgb(214 21 58 / .1); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
-  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
-}
-.update-chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.update-chip[hidden] { display: none; }
-.update-chip:not([hidden]) + .saved { margin-left: 0; }
-
-.workspace { max-width: 1040px; margin: 0 auto; padding: 44px 40px 24px; }
-.page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 26px; }
-.eyebrow { margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--ink-3); }
-h1 { margin: 0; font-size: 40px; line-height: 1.12; font-weight: 800; letter-spacing: -0.03em; }
-h1 span { color: var(--accent); }
-.page-description { margin: 10px 0 0; font-size: 16px; line-height: 1.55; color: var(--ink-2); }
-
-.collection-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
 .search-box {
-  display: flex; align-items: center; gap: 10px; width: 360px; height: 50px; padding: 0 16px;
-  border-radius: 18px; color: var(--ink-3);
-  box-shadow: inset 0 0 0 1px var(--glass-edge);
+  display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px;
+  border-radius: 14px; color: var(--ink-3); background: var(--fill);
   transition: box-shadow 150ms;
 }
 .search-box:focus-within { box-shadow: 0 0 0 2px var(--accent); }
 .search-box input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink); font-size: 16px; }
 .search-box input::placeholder { color: var(--ink-3); }
-.sort-label { font-size: 13px; font-weight: 600; color: var(--ink-3); white-space: nowrap; }
-.search-summary { padding: 0 2px 16px; font-size: 14px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.collection-actions { display: flex; align-items: center; gap: 8px; padding: 0 0 16px; font-size: 15px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.collection-actions > span { margin-right: auto; font-weight: 600; color: var(--ink); }
+.search-summary { margin-top: -6px; padding: 0 8px; font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 
-/* ── 노트 카드 ───────────────────────────────────── */
-.note-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 28px; }
-.note-card {
-  position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 168px; padding: 20px;
-  border-radius: 24px; text-align: left;
-  box-shadow: inset 0 0 0 1px var(--glass-edge);
-  transition: transform 220ms var(--ease-out-expo), box-shadow 200ms;
-}
-.note-card:hover { transform: translateY(-2px); box-shadow: inset 0 0 0 1px var(--glass-edge), var(--shadow-soft); }
-.note-card.selected { box-shadow: inset 0 0 0 2px var(--accent), var(--shadow-soft); }
-.card-top { display: flex; align-items: center; justify-content: space-between; color: var(--ink-3); }
-.card-top small { font-size: 13px; }
-.note-card.selected .card-top .i { color: var(--accent); }
-.note-card h3 { margin: 14px 0 4px; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.note-preview { min-height: 20px; font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-total { display: flex; flex-direction: column; gap: 2px; margin-top: auto; padding-top: 14px; font-size: 13px; color: var(--ink-3); }
-.card-total strong { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.card-total strong small { margin-left: 2px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
-.empty { grid-column: 1 / -1; padding: 34px 16px; border-radius: 24px; background: var(--fill); text-align: center; font-size: 15px; color: var(--ink-2); }
+/* 폴더 › 노트 나무 */
+.tree { flex: 1; min-height: 0; overflow: auto; margin: -6px -6px 0; padding: 0 6px; }
+.tree-folder { display: flex; align-items: center; border-radius: 12px; transition: background-color 150ms; }
+.tree-folder:hover { background: var(--fill); }
+.tree-toggle { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; min-height: 42px; padding: 0 4px 0 6px; text-align: left; font-size: 15px; font-weight: 600; }
+.tree-toggle .i { color: var(--ink-3); }
+.tree-toggle .i:first-child { width: 14px; height: 14px; transition: transform 180ms var(--ease-out-expo); }
+.tree-folder.open .tree-toggle .i:first-child { transform: rotate(90deg); }
+.tree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-name small { display: block; font-size: 11px; font-weight: 500; color: var(--ink-3); }
+.tree-sum { flex-shrink: 0; font-size: 12px; font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.tree-sum.neg { color: var(--neg); }
+.tree-edit { width: 32px; height: 32px; opacity: 0.55; }
+.tree-edit .i { width: 15px; height: 15px; }
+.tree-folder:hover .tree-edit, .tree-edit:focus-visible { opacity: 1; }
+.tree-notes { margin: 0 0 6px 22px; padding-left: 8px; border-left: 1px solid var(--sep); }
+.tree-note { display: flex; width: 100%; align-items: center; gap: 8px; min-height: 40px; padding: 0 8px 0 10px; border-radius: 10px; text-align: left; font-size: 14px; color: var(--ink); transition: background-color 150ms; }
+.tree-note:hover { background: var(--fill); }
+.tree-note.active { background: var(--fill-2); font-weight: 700; }
+.tree-note.active .tree-sum { color: var(--ink-2); }
+.tree > .tree-note { padding-left: 8px; }
+.tree-empty { margin: 4px 0 8px; padding: 0 10px; font-size: 13px; color: var(--ink-3); }
 
-/* ── 편집기 ───────────────────────────────────────── */
-.editor { border-radius: 28px; box-shadow: inset 0 0 0 1px var(--glass-edge), var(--shadow-float); overflow: clip; }
-.editor-top { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 4px 28px; }
-.editor-label { display: flex; align-items: center; font-size: 13px; font-weight: 600; color: var(--ink-3); }
-.editor-actions { display: flex; align-items: center; gap: 6px; }
-.title-row { display: flex; align-items: center; gap: 6px; margin: 0 22px 0 28px; }
-.title-row input { width: 100%; min-width: 0; padding: 4px 0; border: 0; outline: none; background: transparent; color: var(--ink); font-size: 28px; font-weight: 800; letter-spacing: -0.025em; }
-.title-row input::placeholder { color: var(--ink-3); }
-.note-meta { display: flex; align-items: center; gap: 14px; margin: 6px 28px 20px; font-size: 14px; color: var(--ink-3); }
-.note-meta label { display: inline-flex; align-items: center; gap: 8px; }
-.note-meta select {
-  max-width: 180px; min-height: 32px; padding: 0 12px; border: 0; border-radius: 9999px;
-  background: var(--fill); color: var(--ink); font-size: 14px; font-weight: 600;
+.sidebar-bottom { font-size: 13px; color: var(--ink-3); }
+.local-dot { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-fill); }
+.settings-link {
+  display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 44px; padding: 0 8px;
+  border-top: 1px solid var(--sep); border-radius: 0; font-size: 14px; font-weight: 600; color: var(--ink-2);
 }
-.paper-heading { display: flex; justify-content: space-between; padding: 14px 28px 8px; font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.settings-link > span { display: inline-flex; align-items: center; gap: 8px; }
+.settings-link:hover { background: none; color: var(--ink); }
+
+main { flex: 1; min-width: 0; margin-left: 280px; }
+
+/* 위쪽 막대: [메뉴] 노트 이름 ……… [업데이트] [편집] */
+.topbar {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 8px; height: var(--topbar-h); padding: 0 16px 0 28px;
+  box-shadow: inset 0 -1px 0 var(--sep);
+}
+.topbar-title {
+  flex: 1; min-width: 0; padding: 6px 0; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 15px; font-weight: 700; color: var(--ink);
+}
+.topbar-title:disabled { cursor: default; }
+.saved { flex-shrink: 0; font-size: 13px; font-weight: 700; color: var(--hold); }
+.update-chip {
+  display: inline-flex; flex-shrink: 0; align-items: center; gap: 6px;
+  height: 28px; padding: 0 11px; border-radius: 999px;
+  background: rgb(214 21 58 / .1); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
+  font-size: 13px; font-weight: 700;
+}
+.update-chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.edit-button {
+  flex-shrink: 0; height: 34px; padding: 0 14px; border-radius: 999px;
+  font-size: 15px; font-weight: 700; color: var(--accent);
+  transition: background-color 150ms;
+}
+.edit-button:hover { background: var(--fill); }
+
+/* 합계 줄: 노트합계 258,212,980원 (노트 이름 글씨의 1.67배) */
+.total-bar {
+  position: sticky; top: var(--topbar-h); z-index: 4;
+  display: flex; justify-content: flex-end; padding: 8px 16px 8px 28px;
+  background: var(--bar);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: inset 0 -1px 0 var(--sep);
+}
+#copy-total {
+  display: flex; align-items: baseline; gap: 0.3em; min-width: 0; padding: 2px 8px; border-radius: 12px;
+  white-space: nowrap; font-size: min(25px, 6.4vw); line-height: 1.25; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; transition: background-color 150ms;
+}
+#copy-total:hover { background: var(--fill); }
+#copy-total .total-label { font-weight: 600; color: var(--ink-2); }
+#copy-total strong { font-weight: 800; color: var(--ink); }
+#copy-total .won { margin-left: -0.15em; font-weight: 700; color: var(--ink-2); }
+#copy-total.neg strong { color: var(--neg); }
+
+/* ── 본문 ─────────────────────────────────────────── */
+.editor { max-width: 1040px; margin: 20px auto 40px; border-radius: 22px; box-shadow: inset 0 0 0 1px var(--glass-edge), var(--shadow-float); overflow: clip; }
 .paper {
-  position: relative; display: flex; min-height: 260px; padding: 4px 0; overflow: hidden;
+  position: relative; display: flex; padding: 6px 0;
   background: repeating-linear-gradient(transparent 0, transparent calc(var(--line-h) - 1px), var(--sep) calc(var(--line-h) - 1px), var(--sep) var(--line-h));
-  background-position: 0 4px;
+  background-position: 0 6px;
 }
-#line-numbers { width: 52px; flex-shrink: 0; text-align: center; font-size: 12px; line-height: var(--line-h); color: var(--ink-3); opacity: 0.7; user-select: none; font-variant-numeric: tabular-nums; }
+#line-numbers { width: 44px; flex-shrink: 0; text-align: center; font-size: 12px; line-height: var(--line-h); color: var(--ink-3); opacity: 0.7; user-select: none; font-variant-numeric: tabular-nums; }
 #note-body {
-  display: block; flex: 1; min-width: 0; min-height: 252px; margin: 0; padding: 0 8px 0 0;
+  display: block; flex: 1; min-width: 0; min-height: calc(100dvh - var(--topbar-h) - 140px); margin: 0; padding: 0 8px 0 0;
   border: 0; border-radius: 0; outline: none; background: transparent; resize: none;
   overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
   color: var(--ink); font-family: inherit; font-size: 17px; line-height: var(--line-h); tab-size: 2;
 }
 #note-body::-webkit-scrollbar { display: none; }
 #note-body::placeholder { color: var(--ink-3); }
-#line-values { width: 140px; flex-shrink: 0; padding-right: 24px; overflow: hidden; text-align: right; }
+#line-values { width: 140px; flex-shrink: 0; padding-right: 20px; overflow: hidden; text-align: right; }
 #line-values button {
   display: block; width: 100%; height: var(--line-h); text-align: right; white-space: nowrap;
   font-size: 14px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums;
@@ -308,31 +302,11 @@ h1 span { color: var(--accent); }
 #line-values button.invalid { color: var(--wait); }
 #line-values button:disabled { cursor: default; }
 #line-values button:hover:enabled { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
-.editor-hint { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 22px 12px 28px; border-top: 1px solid var(--sep); font-size: 13px; line-height: 1.6; color: var(--ink-2); }
-.editor-hint b { margin-right: 6px; color: var(--ink); }
 code { padding: 2px 6px; border-radius: 6px; background: var(--fill); font-family: inherit; font-size: inherit; font-weight: 600; }
 
-.total-bar {
-  position: sticky; top: var(--topbar-h); z-index: 3;
-  display: flex; flex-wrap: wrap; align-items: center; row-gap: 4px; padding: 14px 22px 14px 28px;
-  background: var(--bar);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  box-shadow: inset 0 1px 0 var(--sep), inset 0 -1px 0 var(--sep), 0 12px 24px -18px rgb(0 0 0 / 0.25);
-}
-.total-bar > div:first-child { display: flex; flex: 1 1 100%; align-items: baseline; justify-content: space-between; gap: 12px; }
-.total-caption { font-size: 15px; font-weight: 700; }
-.valued-count { font-size: 13px; color: var(--ink-3); }
-#copy-total { display: flex; align-items: baseline; gap: 4px; min-width: 0; margin-left: auto; padding: 0 6px; white-space: nowrap; border-radius: 14px; transition: background-color 150ms; }
-#copy-total:hover { background: var(--fill); }
-#copy-total strong { font-size: clamp(26px, 8.4vw, 40px); line-height: 1.15; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-#copy-total > span { font-size: 17px; font-weight: 700; color: var(--ink-2); }
-.card-total strong.neg, #copy-total.neg strong { color: var(--neg); }
-.copy-symbol { align-self: center; margin-left: 8px; color: var(--ink-3); }
-
-.footnote { padding: 28px 0; text-align: center; font-size: 13px; color: var(--ink-3); }
+.empty-state { display: grid; justify-items: center; gap: 14px; padding: 18vh 16px; text-align: center; font-size: 16px; color: var(--ink-2); }
+.empty-state p { margin: 0; }
 .mobile-only { display: none; }
-@media (min-width: 761px) { #mobile-new { display: none; } }
 
 /* ── 시트(대화상자) ─────────────────────────────────── */
 dialog {
@@ -361,6 +335,15 @@ dialog p b { color: var(--ink); }
   border: 0; border-radius: 18px; outline: none; background: var(--fill); color: var(--ink); font-size: 17px;
 }
 #name-input:focus { background: var(--fill-2); box-shadow: 0 0 0 2px var(--accent); }
+.field { display: grid; gap: 6px; margin-top: 16px; font-size: 13px; font-weight: 700; color: var(--ink-3); }
+.field input, .field-select {
+  width: 100%; height: 50px; padding: 0 14px; border: 0; border-radius: 16px; outline: none;
+  background: var(--fill); color: var(--ink); font-size: 17px; font-weight: 500;
+}
+.field input:focus, .field-select:focus { box-shadow: 0 0 0 2px var(--accent); }
+#name-folder { margin-top: 10px; }
+.dialog-buttons.spread { align-items: center; }
+.dialog-buttons.spread .primary { margin-left: auto; }
 .delete-button { background: var(--hold); color: #fff; }
 
 .toast {
@@ -371,25 +354,17 @@ dialog p b { color: var(--ink); }
 }
 
 /* ── 화면 크기 ─────────────────────────────────────── */
-@media (min-width: 1450px) {
-  .workspace { padding-top: 56px; }
-  .paper { min-height: 300px; }
-}
 @media (max-width: 1100px) {
-  .sidebar { width: 228px; padding: 28px 14px 20px; }
-  main { margin-left: 228px; }
-  .workspace { padding: 34px 28px 20px; }
-  .topbar { padding: 0 28px; }
-  .note-grid { gap: 12px; }
-  .note-card { padding: 18px; }
-  .card-total strong { font-size: 19px; }
+  .sidebar { width: 248px; }
+  main { margin-left: 248px; }
+  .editor { margin: 16px 20px 32px; }
 }
 @media (min-width: 768px) {
   @keyframes sheet-in { from { transform: translateY(10px) scale(0.98); opacity: 0.4; } }
 }
 @media (max-width: 760px) {
   .sidebar {
-    display: none; width: min(300px, 86vw); padding-top: calc(26px + env(safe-area-inset-top));
+    display: none; width: min(320px, 88vw); padding-top: calc(20px + env(safe-area-inset-top)); padding-bottom: calc(14px + env(safe-area-inset-bottom));
     background: var(--glass-strong); -webkit-backdrop-filter: saturate(180%) blur(40px); backdrop-filter: saturate(180%) blur(40px);
     box-shadow: inset -1px 0 0 var(--glass-edge), var(--shadow-float);
   }
@@ -397,39 +372,15 @@ dialog p b { color: var(--ink); }
   .mobile-only { display: inline-grid; }
   main { margin-left: 0; }
   :root { --topbar-h: calc(52px + env(safe-area-inset-top)); }
-  .topbar { padding: env(safe-area-inset-top) 12px 0 6px; gap: 4px; }
-  .topbar-title { font-size: 15px; font-weight: 700; color: var(--ink); }
-  .workspace { padding: 26px 16px 0; }
-  .page-heading { align-items: flex-end; margin-bottom: 20px; }
-  .eyebrow { font-size: 13px; }
-  h1 { font-size: 32px; }
-  .page-description { font-size: 15px; }
-  #mobile-new { min-height: 42px; padding: 0 16px; font-size: 14px; }
-  .collection-toolbar { gap: 12px; }
-  .search-box { width: 100%; height: 48px; padding: 0 14px; }
-  .sort-label { display: none; }
-  .note-grid { display: flex; gap: 10px; margin: 0 -16px 18px; padding: 2px 16px 10px; overflow-x: auto; scroll-snap-type: x proximity; scroll-padding: 0 16px; scrollbar-width: none; }
-  .note-grid::-webkit-scrollbar { display: none; }
-  .note-card { flex: 0 0 188px; min-height: 156px; padding: 16px; border-radius: 22px; scroll-snap-align: start; }
-  .note-card h3 { font-size: 17px; }
-  .card-total strong { font-size: 17px; }
-  .note-grid .empty { flex: 1; }
-  .editor { border-radius: 24px; overflow: visible; }
-  .editor-top { padding: 14px 12px 2px 18px; }
-  .title-row { margin: 0 12px 0 18px; }
-  .title-row input { font-size: 24px; }
-  .note-meta { margin: 6px 18px 16px; }
-  .note-meta select { font-size: 16px; max-width: 170px; }
-  .paper-heading { padding: 12px 18px 8px; border-top: 0; }
-  #line-numbers { width: 32px; font-size: 11px; }
-  #line-values { width: 104px; padding-right: 16px; }
+  .topbar { padding: env(safe-area-inset-top) 8px 0 4px; gap: 4px; }
+  .total-bar { padding: 6px 8px 6px 12px; }
+  /* 본문은 화면 가장자리까지 쓴다. */
+  .editor { margin: 0; border-radius: 0; box-shadow: none; overflow: visible; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .paper { padding-bottom: env(safe-area-inset-bottom); }
+  #line-numbers { width: 30px; font-size: 11px; }
+  #line-values { width: 104px; padding-right: 12px; }
   #line-values button { font-size: 13px; }
-  .paper { min-height: 270px; }
-  .editor-hint { padding: 12px 12px 12px 18px; }
-  .editor-hint .quiet { white-space: nowrap; }
-  .total-bar { padding: 12px 12px 12px 18px; }
-  .footnote { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
-  .collection-actions { flex-wrap: wrap; font-size: 14px; }
+  #note-body { min-height: calc(100dvh - var(--topbar-h) - 64px); }
   .sheet-panel { padding: 22px 20px 24px; }
 }
 

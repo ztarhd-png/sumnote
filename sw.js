@@ -4,7 +4,7 @@
 // - 브라우저가 앱을 열 때마다 이 파일(sw.js)이 바뀌었는지 확인한다. 바뀌었으면 새 버전을 뒤에서 받아 두고 기다린다.
 // - 화면 위쪽에 작은 '업데이트' 버튼이 뜨고, 누르면 새 버전으로 바꾼 뒤 다시 연다.
 // ★ 배포할 때마다 VERSION을 반드시 올린다. 올리지 않으면 사용자에게 업데이트가 전달되지 않는다.
-const VERSION = '2026.11.07.2';
+const VERSION = '2026.11.07.3';
 const CACHE = 'sumnote-' + VERSION;
 const ASSETS = ['./', './index.html', './styles.css', './parser.js', './app.js', './manifest.webmanifest',
   './fonts/PretendardVariable.woff2', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
