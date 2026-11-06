@@ -48,6 +48,7 @@
   // 화면 상태(마지막으로 연 노트, 펼쳐 둔 폴더)는 노트 데이터와 따로 저장한다.
   let ui = {}; try { ui = JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch (_) {}
   const openFolders = new Set(Array.isArray(ui.open) ? ui.open : []); // '' = 폴더 없는 노트 묶음
+  let justOpened = null;
   function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify({ lastNote: currentNote, open: [...openFolders] })); } catch (_) {} }
   const sumOf = notes => notes.reduce((s, n) => s + total(n), 0);
   const folderName = folderId => state.folders.find(f => f.id === folderId)?.name || '폴더 없음';
@@ -77,11 +78,11 @@
     for (const g of groups) {
       const notes = ordered(state.notes.filter(n => (n.folderId || '') === g.key));
       const open = openFolders.has(g.key);
-      const head = element('div', 'tree-folder' + (open ? ' open' : ''));
+      const head = element('div', 'tree-folder' + (open ? ' open' : '') + (justOpened === g.key ? ' just-opened' : ''));
       const toggle = element('button', 'tree-toggle');
       toggle.setAttribute('aria-expanded', String(open));
       toggle.append(icon('chevron'), icon('folder'), element('span', 'tree-name', g.name), element('span', 'tree-sum', notes.length ? fmt(sumOf(notes)) : ''));
-      toggle.onclick = () => { if (open) openFolders.delete(g.key); else openFolders.add(g.key); saveUi(); renderTree(); };
+      toggle.onclick = () => { if (open) openFolders.delete(g.key); else { openFolders.add(g.key); justOpened = g.key; } saveUi(); renderTree(); };
       head.append(toggle);
       if (g.folder) {
         const edit = element('button', 'icon-button tree-edit');
@@ -91,13 +92,15 @@
       }
       tree.append(head);
       if (open) {
-        const list = element('div', 'tree-notes');
+        // 방금 펼친 폴더만 미끄러지듯 나타나게 한다(타이핑 중 다시 그릴 때는 움직이지 않게).
+        const list = element('div', 'tree-notes' + (justOpened === g.key ? ' glide-in' : ''));
         notes.forEach(n => list.append(noteRow(n)));
         if (!notes.length) list.append(element('p', 'tree-empty', '노트 없음'));
         tree.append(list);
       }
     }
     if (!groups.length) tree.append(element('p', 'tree-empty', '+ 버튼으로 폴더를 만들어 보세요.'));
+    justOpened = null;
   }
   function renderLines() {
     const n = active(); if (!n) return;
@@ -205,7 +208,13 @@
   $('note-body').oninput = () => { const n = active(); if (n) { n.body = $('note-body').value; renderLines(); changeNote(); } };
   $('search').oninput = () => { query = $('search').value.trim().toLocaleLowerCase(); renderTree(); };
   $('menu-toggle').onclick = () => { const open = $('sidebar').classList.toggle('open'); $('menu-toggle').setAttribute('aria-expanded', String(open)); };
-  document.addEventListener('click', e => { if (e.target.closest('dialog')) return; if (!$('sidebar').contains(e.target) && !$('menu-toggle').contains(e.target)) closeSidebar(); });
+  // 바깥을 누르면 메뉴를 닫는다. 폴더를 누르면 나무를 다시 그려 누른 요소가 문서에서 빠지므로,
+  // contains() 대신 이벤트가 지나온 경로(composedPath)로 판단한다.
+  document.addEventListener('click', e => {
+    const path = e.composedPath();
+    if (path.some(el => el.tagName === 'DIALOG') || path.includes($('sidebar')) || path.includes($('menu-toggle'))) return;
+    closeSidebar();
+  });
   function lastBackup() { try { return localStorage.getItem(BACKUP_KEY); } catch (_) { return null; } }
   function showAppInfo() {
     const at = lastBackup();
