@@ -1,0 +1,32 @@
+name: 숨노트 배포
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 확인
+        uses: actions/checkout@v4
+      - name: Pages 설정
+        uses: actions/configure-pages@v5
+      - name: 정적 파일 묶기
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - name: Pages에 배포
+        id: deployment
+        uses: actions/deploy-pages@v4
