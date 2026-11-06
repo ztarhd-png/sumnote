@@ -13,13 +13,20 @@
       && data.notes.every(n => n && typeof n.id === 'string' && typeof n.title === 'string' && typeof n.body === 'string' && typeof n.updatedAt === 'string' && Number.isFinite(Date.parse(n.updatedAt)) && (n.folderId === null || data.folders.some(f => f.id === n.folderId)))
       && new Set(data.notes.map(n => n.id)).size === data.notes.length;
   }
+  const SAMPLE_FOLDER = '일상 기록';
+  const SAMPLES = [
+    { title: '이번 주 장보기', body: ['사과 6,000', '우유 3,200', '식빵 4,500', '달걀 7,800', '---', '주방 세제 4,900', '할인 -2,000'].join('\n'), inFolder: true },
+    { title: '제주 여행 준비', body: ['항공권 178,000', '숙소 24만원', '렌터카 65,000', '# 설레는 여행 준비'].join('\n'), inFolder: false },
+    { title: '작은 모임 정산', body: ['저녁 78,000', '카페 24,000', '간식 12,000'].join('\n'), inFolder: true }
+  ];
   function starter() {
     const folder = id();
-    return { version: 1, folders: [{ id: folder, name: '일상 기록' }], notes: [
-      { id: id(), title: '이번 주 장보기', body: '사과 6,000\n우유 3,200\n식빵 4,500\n달걀 7,800\n---\n주방 세제 4,900\n할인 -2,000', folderId: folder, updatedAt: now },
-      { id: id(), title: '제주 여행 준비', body: '항공권 178,000\n숙소 24만원\n렌터카 65,000\n# 설레는 여행 준비', folderId: null, updatedAt: now },
-      { id: id(), title: '작은 모임 정산', body: '저녁 78,000\n카페 24,000\n간식 12,000', folderId: folder, updatedAt: now }
-    ] };
+    return { version: 1, folders: [{ id: folder, name: SAMPLE_FOLDER }], notes: SAMPLES.map(s => ({ id: id(), title: s.title, body: s.body, folderId: s.inFolder ? folder : null, updatedAt: now })) };
+  }
+  // 처음 열었을 때 넣어 둔 샘플을 손대지 않은 상태인지 (가져오기 때 샘플을 대신 지우기 위해)
+  function onlySamples() {
+    return state.notes.length > 0 && state.folders.every(f => f.name === SAMPLE_FOLDER)
+      && state.notes.every(n => SAMPLES.some(s => s.title === n.title && s.body === n.body));
   }
   try { const saved = localStorage.getItem(KEY); if (saved) { state = JSON.parse(saved); if (!validData(state)) throw Error(); } else state = starter(); }
   catch (_) { state = { version: 1, folders: [], notes: [] }; storageBroken = true; }
@@ -61,7 +68,7 @@
       card.setAttribute('aria-pressed', String(note.id === currentNote));
       const top = element('div', 'card-top'); top.append(icon('notes'), element('small', '', dateLabel(note.updatedAt)));
       const bottom = element('div', 'card-total'); bottom.append(element('span', '', '합계'));
-      const value = element('strong', '', fmt(total(note))); value.append(element('small', '', '원')); bottom.append(value);
+      const sum = total(note), value = element('strong', sum < 0 ? 'neg' : '', fmt(sum)); value.append(element('small', '', '원')); bottom.append(value);
       card.append(top, element('h3', '', note.title || '이름 없는 노트'), element('div', 'note-preview', note.body.split('\n').find(l => query ? l.toLocaleLowerCase().includes(query) : l.trim()) || '첫 줄을 적어 보세요.'), bottom);
       card.onclick = () => { currentNote = note.id; renderCards(); renderEditor(); };
       $('notes').append(card);
@@ -81,13 +88,13 @@
     parsed.lines.forEach((line, i) => {
       $('line-numbers').append(element('div', '', String(i + 1).padStart(2, '0')));
       const label = line.type === 'subtotal' ? '소계 ' + fmt(line.value) : line.type === 'invalid' ? '수식 확인' : line.value === null ? '' : fmt(line.value);
-      const button = element('button', line.type, label);
+      const button = element('button', line.type + (line.value > 0 ? ' pos' : line.value < 0 ? ' neg' : ''), label);
       button.disabled = line.value === null;
       if (line.value !== null) { button.setAttribute('aria-label', `${i + 1}번째 줄 ${label} 복사`); button.onclick = () => copy(fmt(line.value)); }
       $('line-values').append(button);
     });
     $('note-body').style.height = Math.max(252, parsed.lines.length * 34) + 'px';
-    $('note-total').textContent = fmt(parsed.total);
+    $('note-total').textContent = fmt(parsed.total); $('copy-total').classList.toggle('neg', parsed.total < 0);
     $('valued-count').textContent = parsed.lines.filter(l => l.type === 'value').length + '개 줄을 더했어요';
   }
   function renderEditor() {
@@ -149,10 +156,12 @@
       const folderIds = new Map(data.folders.map(f => [f.id, id()]));
       const folders = data.folders.map(f => ({ id: folderIds.get(f.id), name: f.name }));
       const notes = data.notes.map(n => ({ id: id(), title: n.title, body: n.body, folderId: folderIds.get(n.folderId) || null, updatedAt: n.updatedAt }));
-      const merged = { version: 1, folders: [...state.folders, ...folders], notes: [...state.notes, ...notes] };
+      const replaceSamples = onlySamples();
+      const base = replaceSamples ? { folders: [], notes: [] } : state;
+      const merged = { version: 1, folders: [...base.folders, ...folders], notes: [...base.notes, ...notes] };
       // Save the entire import before replacing the current in-memory collection.
       localStorage.setItem(KEY, JSON.stringify(merged)); state = merged;
-      selectFolder(null); $('settings-dialog').close(); toast(`노트 ${notes.length}개를 가져왔어요.`);
+      selectFolder(null); $('settings-dialog').close(); toast(`노트 ${notes.length}개를 가져왔어요.` + (replaceSamples ? ' 샘플 노트는 정리했어요.' : ''));
     } catch (error) { toast(error.name === 'QuotaExceededError' ? '저장 공간이 부족해 가져오지 못했어요.' : '숨노트 JSON 백업 파일인지 확인해 주세요. (최대 10MB)'); }
     finally { $('import-file').value = ''; }
   };

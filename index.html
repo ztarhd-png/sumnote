@@ -50,10 +50,10 @@
       <div class="editor-top"><div class="editor-label"><span class="local-dot"></span>지금 쓰는 노트</div><div class="editor-actions"><button id="export-csv" class="chip"><svg class="i"><use href="#i-download"/></svg>CSV</button><button id="delete-note" class="icon-button danger" aria-label="현재 노트 삭제"><svg class="i"><use href="#i-trash"/></svg></button></div></div>
       <div class="title-row"><input id="note-title" aria-label="노트 이름" placeholder="노트 이름" maxlength="100"><button id="rename-note" class="icon-button" aria-label="노트 이름 변경"><svg class="i"><use href="#i-pencil"/></svg></button></div>
       <div class="note-meta"><label>폴더 <select id="note-folder" aria-label="노트 폴더"></select></label><span id="note-date"></span></div>
+      <div class="total-bar"><div><span class="total-caption">노트 합계</span><span id="valued-count" class="valued-count"></span></div><button id="copy-total" aria-label="노트 합계 복사"><strong id="note-total">0</strong><span>원</span><svg class="i copy-symbol"><use href="#i-copy"/></svg></button></div>
       <div class="paper-heading"><span>자유롭게 적어 보세요</span><span>계산값 · 탭하여 복사</span></div>
       <div class="paper"><div id="line-numbers" aria-hidden="true"></div><textarea id="note-body" wrap="off" spellcheck="false" aria-label="노트 내용" placeholder="점심 12,000&#10;커피 4,500&#10;환불 -3,000"></textarea><div id="line-values" aria-label="각 줄 계산값"></div></div>
       <div class="editor-hint"><span><b>도움말</b> 글 옆에 숫자만 적으면 끝. <code>---</code> 로 소계를 나눠 보세요.</span><button id="examples" class="quiet">작성 도움말</button></div>
-      <div class="total-bar"><div><span class="total-caption">노트 합계</span><span id="valued-count" class="valued-count"></span></div><button id="copy-total" aria-label="노트 합계 복사"><strong id="note-total">0</strong><span>원</span><svg class="i copy-symbol"><use href="#i-copy"/></svg></button></div>
     </section>
     <div class="footnote">복잡한 하루에, 단순한 합계.</div>
   </section>

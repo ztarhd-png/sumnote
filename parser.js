@@ -30,10 +30,15 @@
     function add() { let v = multiply(); while (tokens[i] === '+' || tokens[i] === '-') { const op = tokens[i++], b = multiply(); v = op === '+' ? v + b : v - b; } return v; }
     try { const value = add(); return i === tokens.length && Number.isFinite(value) ? value : null; } catch (_) { return null; }
   }
+  // 날짜(2025.8.18. · 2025-08-22 · 2025/8/1 · 9.1.)는 금액이 아니므로 계산 전에 지운다.
+  // (lookbehind 없이 작성: 오래된 iOS Safari에서도 동작)
+  const datePattern = /(^|[^\d.,])(?:\d{4}\s?[./-]\s?\d{1,2}\s?[./-]\s?\d{1,2}\.?|\d{1,2}\.\d{1,2}\.)(?!\d)/g;
   function parseLine(line) {
-    const text = line.trim();
-    if (!text || /^(#|\/\/)/.test(text)) return { type: 'ignored', value: null };
-    if (text === '---') return { type: 'subtotal', value: null };
+    const raw = line.trim();
+    if (!raw || /^(#|\/\/)/.test(raw)) return { type: 'ignored', value: null };
+    if (raw === '---') return { type: 'subtotal', value: null };
+    const text = raw.replace(datePattern, '$1 ').trim();
+    if (!text) return { type: 'ignored', value: null };
     const value = expression(text);
     if (value !== null) return { type: 'value', value };
     // An invalid expression must never silently turn into its last operand.
