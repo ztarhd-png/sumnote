@@ -215,6 +215,16 @@ main { flex: 1; min-width: 0; margin-left: 264px; }
 }
 .topbar-title { font-weight: 600; }
 .saved { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--ok); }
+/* 새 버전이 받아져 있을 때만 보이는 작은 버튼. 저장 상태 바로 왼쪽에 붙는다. */
+.update-chip {
+  display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
+  height: 28px; padding: 0 12px; border: 0; border-radius: 999px;
+  background: rgb(214 21 58 / .1); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.update-chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.update-chip[hidden] { display: none; }
+.update-chip:not([hidden]) + .saved { margin-left: 0; }
 
 .workspace { max-width: 1040px; margin: 0 auto; padding: 44px 40px 24px; }
 .page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 26px; }

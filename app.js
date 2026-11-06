@@ -2,7 +2,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const KEY = 'sumnote.data.v1', BACKUP_KEY = 'sumnote.lastBackup';
-  const VERSION = '2026.11.07'; // 배포할 때마다 날짜를 바꾸면 설정 화면에서 새 버전이 왔는지 확인할 수 있다.
+  let appVersion = null; // 설치된 버전은 서비스 워커(sw.js의 VERSION)에게 물어서 받는다.
   const fmt = n => new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 8 }).format(Object.is(n, -0) ? 0 : n);
   const id = () => globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2);
   const now = new Date().toISOString();
@@ -140,7 +140,7 @@
   function lastBackup() { try { return localStorage.getItem(BACKUP_KEY); } catch (_) { return null; } }
   function showAppInfo() {
     const at = lastBackup();
-    $('app-info').textContent = `버전 ${VERSION} · 마지막 백업 ${at ? new Date(at).toLocaleDateString('ko-KR') : '없음'}`;
+    $('app-info').textContent = `버전 ${appVersion || '확인 중'} · 마지막 백업 ${at ? new Date(at).toLocaleDateString('ko-KR') : '없음'}`;
   }
   $('settings').onclick = $('examples').onclick = () => { showAppInfo(); $('settings-dialog').showModal(); };
   async function copy(text) {
@@ -187,5 +187,37 @@
   if (storageBroken) { $('save-status').textContent = '저장 확인 필요'; toast('기존 데이터를 읽지 못했어요. 원본 보호를 위해 자동 저장을 멈췄어요.'); } else persist();
   // 저장소 공간이 부족할 때 브라우저가 이 앱의 데이터를 먼저 지우지 않도록 요청한다(지원하는 브라우저만).
   navigator.storage?.persist?.().catch(() => {});
-  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(reg => reg.update()).catch(() => {}); });
+  // 업데이트: 새 버전은 뒤에서 받아 두기만 하고, 사용자가 '업데이트'를 누를 때 바꾼다.
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    const sw = navigator.serviceWorker;
+    let updating = false;
+    const askVersion = () => {
+      if (!sw.controller) return;
+      const channel = new MessageChannel();
+      channel.port1.onmessage = e => { appVersion = e.data; showAppInfo(); };
+      sw.controller.postMessage('version', [channel.port2]);
+    };
+    sw.addEventListener('controllerchange', () => { if (updating) location.reload(); else askVersion(); });
+    window.addEventListener('load', () => {
+      sw.register('./sw.js', { updateViaCache: 'none' }).then(reg => {
+        // 처음 설치할 때(기존 버전이 없을 때)는 알릴 필요가 없다.
+        const offer = () => { if (reg.waiting && sw.controller) $('update-ready').hidden = false; };
+        offer();
+        reg.addEventListener('updatefound', () => {
+          const next = reg.installing;
+          if (next) next.addEventListener('statechange', () => { if (next.state === 'installed') offer(); });
+        });
+        $('update-ready').onclick = () => {
+          if (!reg.waiting) return;
+          updating = true; $('update-ready').disabled = true; $('update-ready').textContent = '바꾸는 중…';
+          reg.waiting.postMessage('skipWaiting');
+        };
+        // 홈 화면 앱은 닫지 않고 다시 띄우는 경우가 많아, 돌아올 때도 새 버전을 확인한다.
+        const check = () => reg.update().catch(() => {});
+        check();
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+      }).catch(() => {});
+      askVersion();
+    });
+  }
 })();
