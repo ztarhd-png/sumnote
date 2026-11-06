@@ -47,7 +47,9 @@
   function dateLabel(date) { return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(new Date(date)); }
   // 화면 상태(마지막으로 연 노트, 펼쳐 둔 폴더)는 노트 데이터와 따로 저장한다.
   let ui = {}; try { ui = JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch (_) {}
-  const openFolders = new Set(Array.isArray(ui.open) ? ui.open : []); // '' = 폴더 없는 노트 묶음
+  const openFolders = new Set(Array.isArray(ui.open) ? ui.open.slice(0, 1) : []); // '' = 폴더 없는 노트 묶음
+  // 폴더는 한 번에 하나만 펼친다. 다른 폴더를 펼치면 앞의 폴더는 저절로 접힌다.
+  function openOnly(key) { openFolders.clear(); openFolders.add(key); }
   let justOpened = null;
   function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify({ lastNote: currentNote, open: [...openFolders] })); } catch (_) {} }
   const sumOf = notes => notes.reduce((s, n) => s + total(n), 0);
@@ -82,7 +84,7 @@
       const toggle = element('button', 'tree-toggle');
       toggle.setAttribute('aria-expanded', String(open));
       toggle.append(icon('chevron'), icon('folder'), element('span', 'tree-name', g.name), element('span', 'tree-sum', notes.length ? fmt(sumOf(notes)) : ''));
-      toggle.onclick = () => { if (open) openFolders.delete(g.key); else { openFolders.add(g.key); justOpened = g.key; } saveUi(); renderTree(); };
+      toggle.onclick = () => { if (open) openFolders.delete(g.key); else { openOnly(g.key); justOpened = g.key; } saveUi(); renderTree(); };
       head.append(toggle);
       if (g.folder) {
         const edit = element('button', 'icon-button tree-edit');
@@ -131,7 +133,7 @@
   function closeSidebar() { $('sidebar').classList.remove('open'); $('menu-toggle').setAttribute('aria-expanded', 'false'); }
   function openNote(noteId, closeMenu) {
     currentNote = noteId;
-    const n = active(); if (n) openFolders.add(n.folderId || '');
+    const n = active(); if (n) openOnly(n.folderId || '');
     saveUi();
     if (closeMenu) closeSidebar();
     renderTree(); renderEditor();
@@ -168,7 +170,7 @@
   $('cancel-delete').onclick = () => $('confirm-dialog').close();
   $('confirm-delete').onclick = () => { $('confirm-dialog').close(); deleteAction(); };
   $('new-note').onclick = $('empty-new').onclick = newNote;
-  $('new-folder').onclick = () => askName('새 폴더', '', name => { const f = { id: id(), name }; state.folders.push(f); openFolders.add(f.id); persist(); saveUi(); renderTree(); });
+  $('new-folder').onclick = () => askName('새 폴더', '', name => { const f = { id: id(), name }; state.folders.push(f); openOnly(f.id); persist(); saveUi(); renderTree(); });
   // 노트 편집: 이름 · 폴더 이동 · CSV · 삭제
   $('edit-note').onclick = $('note-heading').onclick = () => {
     const n = active(); if (!n) return;
@@ -179,7 +181,7 @@
   $('edit-form').onsubmit = event => {
     event.preventDefault(); const n = active(); if (!n) return;
     const title = $('edit-title').value.trim() || '이름 없는 노트', folderId = $('edit-folder').value || null;
-    if (title !== n.title || folderId !== n.folderId) { n.title = title; n.folderId = folderId; openFolders.add(folderId || ''); saveUi(); changeNote(); renderEditor(); }
+    if (title !== n.title || folderId !== n.folderId) { n.title = title; n.folderId = folderId; openOnly(folderId || ''); saveUi(); changeNote(); renderEditor(); }
     $('edit-dialog').close();
   };
   $('delete-note').onclick = () => {
