@@ -25,6 +25,15 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           enablement: true
+      - name: 로컬에서 만든 아이콘 복원
+        shell: bash
+        run: |
+          for size in 180 192 512; do
+            if ! file "icons/icon-${size}.png" | grep -q 'PNG image'; then
+              base64 -d "icons/icon-${size}.png" > "icons/icon-${size}.decoded"
+              mv "icons/icon-${size}.decoded" "icons/icon-${size}.png"
+            fi
+          done
       - name: 정적 파일 묶기
         uses: actions/upload-pages-artifact@v3
         with:
