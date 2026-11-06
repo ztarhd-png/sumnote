@@ -1,7 +1,8 @@
 (function (root) {
   'use strict';
   const numberSource = '(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?';
-  const amountSource = '(?:' + numberSource + '(?:천)?(?:억|만)?)+(?:원)?';
+  const unitSource = numberSource + '(?:천(?:억|만)?|억|만)';
+  const amountSource = '(?:(?:' + unitSource + ')+(?:' + numberSource + ')?|' + numberSource + ')(?:원)?';
   function amount(text) {
     let sum = 0, chunk = 0, pending = 0;
     const parts = text.replace(/[,원]/g, '').match(/\d+(?:\.\d+)?|억|만|천/g) || [];

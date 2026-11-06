@@ -61,7 +61,7 @@
       const top = element('div', 'card-top'); top.append(element('span', '', '▤'), element('small', '', dateLabel(note.updatedAt)));
       const bottom = element('div', 'card-total'); bottom.append(element('span', '', '합계'));
       const value = element('strong', '', fmt(total(note))); value.append(element('small', '', '원')); bottom.append(value);
-      card.append(top, element('h3', '', note.title || '이름 없는 노트'), element('div', 'note-preview', note.body.split('\n').find(l => l.trim()) || '첫 줄을 적어 보세요.'), bottom);
+      card.append(top, element('h3', '', note.title || '이름 없는 노트'), element('div', 'note-preview', note.body.split('\n').find(l => query ? l.toLocaleLowerCase().includes(query) : l.trim()) || '첫 줄을 적어 보세요.'), bottom);
       card.onclick = () => { currentNote = note.id; renderCards(); renderEditor(); };
       $('notes').append(card);
     }
