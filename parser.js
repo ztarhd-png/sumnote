@@ -52,6 +52,10 @@
       const end = m.index + m[0].length, after = s[end] || '', before = m.index ? s[m.index - 1] : '';
       if (attached.test(after) || code.test(before)) continue;
       if (/[-/]/.test(after) && attached.test(s[end + 1] || '')) continue;
+      // 4,4 · 1,0000 · 1.2.3 · 12,34,567처럼 쉼표·점이 천 단위/소수점 규칙에 맞지 않아
+      // 숫자가 쪼개진 경우: 쪼개진 조각은 모두 금액이 아니다(조각이 다른 숫자에 붙어 있으면 뺀다).
+      const glued = (ch, next) => /\d/.test(ch) || (/[.,]/.test(ch) && /\d/.test(next || ''));
+      if (glued(after, s[end + 1]) || glued(before, m.index > 1 ? s[m.index - 2] : '')) continue;
       const n = amount(m[0].replace(/^[+-]/, '')) * (m[0][0] === '-' ? -1 : 1);
       sum += n;
       spans.push([lead + m.index, lead + m.index + m[0].length, Math.sign(n)]);
