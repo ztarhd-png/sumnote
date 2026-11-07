@@ -298,13 +298,15 @@ main { flex: 1; min-width: 0; margin-left: 280px; }
    두 층은 글꼴·크기·간격이 1px도 달라지면 안 되므로 같은 규칙을 쓴다. */
 .ink-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
 #note-body, #note-ink {
-  margin: 0; padding: 0 8px 0 0; border: 0;
+  margin: 0; padding: 0 20px 0 0; border: 0;
   font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
   font-size: 17px; font-weight: 400; font-style: normal; line-height: var(--line-h);
   font-feature-settings: "ss06"; font-variant: normal; font-kerning: auto;
   letter-spacing: 0; word-spacing: 0; text-indent: 0; text-transform: none; tab-size: 2;
-  white-space: pre; overflow-wrap: normal; word-break: normal;
+  /* 긴 줄은 화면 폭에서 줄바꿈. 두 층이 같은 자리에서 끊기도록 규칙을 똑같이 둔다. */
+  white-space: pre-wrap; overflow-wrap: break-word; word-break: keep-all; line-break: auto;
 }
+#note-ink .ink-line { min-height: var(--line-h); }
 #note-ink {
   position: absolute; top: 0; left: 0; right: 0; pointer-events: none; user-select: none;
   color: var(--ink); will-change: transform;
@@ -314,7 +316,7 @@ main { flex: 1; min-width: 0; margin-left: 280px; }
 #note-body {
   position: relative; display: block; width: 100%; min-height: calc(100dvh - var(--topbar-h) - 140px);
   border-radius: 0; outline: none; background: transparent; resize: none; -webkit-appearance: none; appearance: none;
-  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  overflow: hidden; scrollbar-width: none;
   color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--ink);
 }
 #note-body::-webkit-scrollbar { display: none; }
@@ -322,17 +324,6 @@ main { flex: 1; min-width: 0; margin-left: 280px; }
 #note-body::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
 .pos-text { color: var(--pos); }
 .neg-text { color: var(--neg); }
-#line-values { width: 140px; flex-shrink: 0; padding-right: 20px; overflow: hidden; text-align: right; }
-#line-values button {
-  display: block; width: 100%; height: var(--line-h); text-align: right; white-space: nowrap;
-  font-size: 14px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums;
-}
-#line-values button.pos { color: var(--pos); }
-#line-values button.neg { color: var(--neg); }
-#line-values button.subtotal { font-weight: 800; }
-#line-values button.invalid { color: var(--wait); }
-#line-values button:disabled { cursor: default; }
-#line-values button:hover:enabled { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 code { padding: 2px 6px; border-radius: 6px; background: var(--fill); font-family: inherit; font-size: inherit; font-weight: 600; }
 
 .empty-state { display: grid; justify-items: center; gap: 14px; padding: 18vh 16px; text-align: center; font-size: 16px; color: var(--ink-2); }
@@ -428,8 +419,7 @@ dialog p b { color: var(--ink); }
   .editor { margin: 0; border-radius: 0; box-shadow: none; overflow: visible; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
   .paper { padding-bottom: env(safe-area-inset-bottom); }
   #line-numbers { width: 30px; font-size: 11px; }
-  #line-values { width: 104px; padding-right: 12px; }
-  #line-values button { font-size: 13px; }
+  #note-body, #note-ink { padding-right: 14px; }
   #note-body { min-height: calc(100dvh - var(--topbar-h) - 64px); }
   .sheet-panel { padding: 22px 20px 24px; }
 }
