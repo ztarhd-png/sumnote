@@ -294,14 +294,34 @@ main { flex: 1; min-width: 0; margin-left: 280px; }
   background-position: 0 6px;
 }
 #line-numbers { width: 44px; flex-shrink: 0; text-align: center; font-size: 12px; line-height: var(--line-h); color: var(--ink-3); opacity: 0.7; user-select: none; font-variant-numeric: tabular-nums; }
+/* 본문: 투명한 입력칸 아래에 같은 글자를 깔고, 합계에 들어간 숫자만 칠한다.
+   두 층은 글꼴·크기·간격이 1px도 달라지면 안 되므로 같은 규칙을 쓴다. */
+.ink-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+#note-body, #note-ink {
+  margin: 0; padding: 0 8px 0 0; border: 0;
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+  font-size: 17px; font-weight: 400; font-style: normal; line-height: var(--line-h);
+  font-feature-settings: "ss06"; font-variant: normal; font-kerning: auto;
+  letter-spacing: 0; word-spacing: 0; text-indent: 0; text-transform: none; tab-size: 2;
+  white-space: pre; overflow-wrap: normal; word-break: normal;
+}
+#note-ink {
+  position: absolute; top: 0; left: 0; right: 0; pointer-events: none; user-select: none;
+  color: var(--ink); will-change: transform;
+}
+#note-ink .pos { color: var(--pos); }
+#note-ink .neg { color: var(--neg); }
 #note-body {
-  display: block; flex: 1; min-width: 0; min-height: calc(100dvh - var(--topbar-h) - 140px); margin: 0; padding: 0 8px 0 0;
-  border: 0; border-radius: 0; outline: none; background: transparent; resize: none;
+  position: relative; display: block; width: 100%; min-height: calc(100dvh - var(--topbar-h) - 140px);
+  border-radius: 0; outline: none; background: transparent; resize: none; -webkit-appearance: none; appearance: none;
   overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
-  color: var(--ink); font-family: inherit; font-size: 17px; line-height: var(--line-h); tab-size: 2;
+  color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--ink);
 }
 #note-body::-webkit-scrollbar { display: none; }
-#note-body::placeholder { color: var(--ink-3); }
+#note-body::placeholder { color: var(--ink-3); -webkit-text-fill-color: var(--ink-3); opacity: 1; }
+#note-body::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.pos-text { color: var(--pos); }
+.neg-text { color: var(--neg); }
 #line-values { width: 140px; flex-shrink: 0; padding-right: 20px; overflow: hidden; text-align: right; }
 #line-values button {
   display: block; width: 100%; height: var(--line-h); text-align: right; white-space: nowrap;

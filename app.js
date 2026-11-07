@@ -108,6 +108,19 @@
     const n = active(); if (!n) return;
     const parsed = SumParser.parseNote(n.body);
     $('line-numbers').replaceChildren(); $('line-values').replaceChildren();
+    // 본문 아래 층: 같은 글자를 그리고, 합계에 들어간 숫자만 파랑/빨강으로 칠한다.
+    const ink = document.createDocumentFragment();
+    parsed.lines.forEach((line, i) => {
+      if (i) ink.append('\n');
+      let at = 0;
+      for (const [a, b, sign] of line.spans) {
+        if (a > at) ink.append(line.raw.slice(at, a));
+        ink.append(element('span', sign < 0 ? 'neg' : sign > 0 ? 'pos' : '', line.raw.slice(a, b)));
+        at = b;
+      }
+      if (at < line.raw.length) ink.append(line.raw.slice(at));
+    });
+    $('note-ink').replaceChildren(ink);
     parsed.lines.forEach((line, i) => {
       $('line-numbers').append(element('div', '', String(i + 1).padStart(2, '0')));
       const label = line.type === 'subtotal' ? '소계 ' + fmt(line.value) : line.type === 'invalid' ? '수식 확인' : line.value === null ? '' : fmt(line.value);
@@ -118,6 +131,7 @@
     });
     // 높이는 줄 수만큼. 화면을 다 채우는 최소 높이는 CSS가 맡는다.
     $('note-body').style.height = parsed.lines.length * 34 + 8 + 'px';
+    syncInk();
     $('note-total').textContent = fmt(parsed.total); $('copy-total').classList.toggle('neg', parsed.total < 0);
   }
   function renderEditor() {
@@ -207,6 +221,9 @@
       state.folders = state.folders.filter(v => v.id !== f.id); openFolders.delete(f.id); persist(); saveUi(); renderTree();
     });
   };
+  function syncInk() { const b = $('note-body'); $('note-ink').style.transform = `translate(${-b.scrollLeft}px, ${-b.scrollTop}px)`; }
+  $('note-body').addEventListener('scroll', syncInk);
+  $('note-body').addEventListener('select', syncInk);
   $('note-body').oninput = () => { const n = active(); if (n) { n.body = $('note-body').value; renderLines(); changeNote(); } };
   $('search').oninput = () => { query = $('search').value.trim().toLocaleLowerCase(); renderTree(); };
   $('menu-toggle').onclick = () => { const open = $('sidebar').classList.toggle('open'); $('menu-toggle').setAttribute('aria-expanded', String(open)); };
