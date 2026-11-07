@@ -1,10 +1,10 @@
 (function (root) {
   'use strict';
   const numberSource = '(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?';
-  // 금액은 숫자(쉼표·소수점)와 붙여 쓴 '원'까지만. 6억·3만·2천처럼 숫자 바로 뒤에 글자가 붙으면
-  // 표기용 글자로 보고 계산하지 않는다(원만 예외).
-  const amountSource = numberSource + '(?:원)?';
-  function amount(text) { return Number(text.replace(/[,원]/g, '')); }
+  // 금액은 숫자(쉼표·소수점)만. 6억·3만·12,000원처럼 숫자 바로 뒤에 글자가 붙으면
+  // 표기용 글자로 보고 계산하지 않는다.
+  const amountSource = numberSource;
+  function amount(text) { return Number(text.replace(/,/g, '')); }
 
   function expression(source) {
     const s = source.replace(/−/g, '-').trim();
@@ -39,9 +39,9 @@
       return { type: 'value', value, spans: [[lead + a, lead + b, Math.sign(value)]] };
     }
     // An invalid expression must never silently turn into its last operand.
-    if (/^[\d\s,.원()+*/−-]+$/.test(text) && /[+*/()-]/.test(text)) return { type: 'invalid', value: null, spans: [] };
+    if (/^[\d\s,.()+*/−-]+$/.test(text) && /[+*/()-]/.test(text)) return { type: 'invalid', value: null, spans: [] };
     // 한 줄의 금액은 모두 더한다(SumsApp과 같음: '국세 24990 지방세 2490' → 27,480).
-    // 6억·3만·3월·4대보험·25년·2잔·10%·14:30처럼 글자나 기호가 바로 뒤에 붙은 숫자는 금액이 아니다(원은 예외).
+    // 6억·12,000원·3월·4대보험·25년·2잔·10%·14:30처럼 글자나 기호가 바로 뒤에 붙은 숫자는 금액이 아니다.
     const s = text.replace(/−/g, '-');
     const attached = /[A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ%:]/;
     const spans = [];
