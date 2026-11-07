@@ -248,19 +248,20 @@
   $('note-body').addEventListener('select', syncInk);
   // 화면 폭이 바뀌면(회전·창 크기) 줄바꿈 위치가 달라지므로 줄번호와 높이를 다시 맞춘다.
   let inkWidth = 0;
-  const refit = () => { const w = $('note-ink').clientWidth; if (w && w !== inkWidth) { inkWidth = w; if (active()) fitLines(); } };
+  const refit = () => { const w = $('note-ink').clientWidth; if (w && w !== inkWidth) { inkWidth = w; if (active() && !editing) fitLines(); } };
   if (window.ResizeObserver) new ResizeObserver(refit).observe($('note-ink'));
   addEventListener('resize', refit); addEventListener('orientationchange', () => setTimeout(refit, 200));
   document.fonts?.ready.then(() => active() && fitLines());
   // 타자 중에는 화면(형광펜·합계)만 바로 고치고, 저장과 왼쪽 메뉴 갱신은 손을 멈춘 뒤에 한 번 한다.
   // 앱을 내리거나 다른 노트로 옮기면 기다리지 않고 바로 저장한다.
-  // 한글 조합 중(ㄱ→가→각)에는 화면을 전혀 건드리지 않는다. 아이폰 키보드는 조합 중인 글자를
-  // 직접 그리는데, 그 사이에 문서를 고치면 글자가 두 번 보이거나 사라졌다 생긴다.
-  // 형광펜·줄번호·제목·왼쪽 메뉴는 조합이 끝난 뒤에 한 번에 맞춘다.
-  let saveTimer = null, composing = false;
+  // 쓰는 동안은 보통 메모장: 형광펜·줄번호·합계·제목·왼쪽 메뉴를 전혀 다시 그리지 않는다.
+  // (아이폰 한글 키보드는 조합 중인 글자를 직접 그리므로, 그 사이 화면을 고치면 글자가 꼬인다.)
+  // 위쪽 '저장'을 누르거나 키보드를 내리면 그때 한 번에 색과 합계를 맞춘다.
+  // 글 자체는 쓰는 동안에도 손을 멈추면 저장소에 저장된다(화면은 그대로).
+  let saveTimer = null, composing = false, editing = false;
   function flushSave() {
     if (!saveTimer) return; clearTimeout(saveTimer); saveTimer = null;
-    persist(); if (!composing) renderTree();
+    persist(); if (!editing) renderTree();
   }
   function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 400); }
   function takeInput() {
@@ -268,21 +269,29 @@
     n.body = $('note-body').value; n.title = titleOf(n.body); n.updatedAt = new Date().toISOString();
     return n;
   }
-  function refreshAfterTyping() {
+  // 글이 길어져도 가려지지 않게 입력칸 높이만 늘린다(글자는 건드리지 않음).
+  function growOnly() { const b = $('note-body'); if (b.scrollHeight > b.clientHeight) b.style.height = b.scrollHeight + 'px'; }
+  function applyNote() {
     const n = active(); if (!n) return;
     $('note-heading').textContent = nameOf(n);
     renderLines();
+    clearTimeout(saveTimer); saveTimer = null; persist(); renderTree();
   }
-  // 조합 중 줄이 넘쳐도 글자가 가려지지 않게 높이만 늘린다(글자·문서는 건드리지 않음).
-  function growOnly() { const b = $('note-body'); if (b.scrollHeight > b.clientHeight) b.style.height = b.scrollHeight + 'px'; }
-  $('note-body').addEventListener('compositionstart', () => { composing = true; $('note-ink').classList.add('paused'); });
-  $('note-body').addEventListener('compositionend', () => {
-    composing = false; $('note-ink').classList.remove('paused');
-    if (takeInput()) { refreshAfterTyping(); scheduleSave(); }
-  });
+  function startEditing() { if (editing) return; editing = true; document.body.classList.add('editing'); }
+  $('note-body').addEventListener('focus', startEditing);
+  // 저장 버튼 또는 키보드 내림: 메모장 모드를 끝내고 색·줄번호·합계·제목을 한 번에 맞춘다.
+  function finishEditing() {
+    editing = false; composing = false; document.body.classList.remove('editing');
+    if (takeInput()) applyNote();
+  }
+  $('note-body').addEventListener('blur', finishEditing);
+  $('save-note').onclick = () => { finishEditing(); $('note-body').blur(); };
+  $('note-body').addEventListener('compositionstart', () => { composing = true; });
+  $('note-body').addEventListener('compositionend', () => { composing = false; growOnly(); });
   $('note-body').oninput = event => {
+    startEditing(); // 포커스 이벤트를 놓친 경우에도 쓰기 시작하면 메모장 모드로
     if (!takeInput()) return;
-    if (composing || event.isComposing) growOnly(); else refreshAfterTyping();
+    if (!composing && !event.isComposing) growOnly();
     scheduleSave();
   };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });

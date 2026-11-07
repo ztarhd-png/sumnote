@@ -265,6 +265,13 @@ main { flex: 1; min-width: 0; margin-left: 280px; }
   transition: background-color 150ms;
 }
 .edit-button:hover { background: var(--fill); }
+/* 쓰는 동안: '편집' 대신 '저장'. 형광펜과 줄번호는 저장할 때 다시 맞추므로 쓰는 동안은 숨긴다. */
+#save-note { display: none; background: var(--accent); color: #fff; }
+#save-note:hover { background: var(--accent); filter: brightness(1.05); }
+.editing #save-note { display: inline-block; }
+.editing #edit-note { display: none; }
+.editing #note-ink { display: none; }
+.editing #line-numbers { visibility: hidden; }
 
 /* 합계 줄: 노트합계 258,212,980원 (노트 이름 글씨의 1.67배) */
 .total-bar {
@@ -295,7 +302,7 @@ main { flex: 1; min-width: 0; margin-left: 280px; }
 }
 #line-numbers { width: 44px; flex-shrink: 0; text-align: center; font-size: 12px; line-height: var(--line-h); color: var(--ink-3); opacity: 0.7; user-select: none; font-variant-numeric: tabular-nums; }
 /* 본문: 글자는 입력칸이 직접 그린다(키보드 조합 중인 한글이 두 번 보이지 않도록).
-   입력칸 아래 층은 글자를 그리지 않고, 합계에 들어간 숫자 자리에만 파랑/빨강 형광펜을 깐다.
+   입력칸 아래 층은 글자를 그리지 않고, 저장했을 때 합계에 들어간 숫자 자리에만 파랑/빨강 형광펜을 깐다.
    두 층은 글꼴·크기·간격이 같아야 형광펜이 숫자 자리에 맞으므로 같은 규칙을 쓴다. */
 .ink-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
 #note-body, #note-ink {
@@ -313,7 +320,6 @@ main { flex: 1; min-width: 0; margin-left: 280px; }
   color: transparent; -webkit-text-fill-color: transparent; will-change: transform;
 }
 #note-ink .pos, #note-ink .neg { border-radius: 4px; }
-#note-ink.paused { visibility: hidden; }
 #note-ink .pos { background: rgba(11, 95, 191, 0.16); background: color-mix(in srgb, var(--pos) 18%, transparent); box-shadow: inset 0 -2px 0 var(--pos); }
 #note-ink .neg { background: rgba(196, 38, 46, 0.16); background: color-mix(in srgb, var(--neg) 18%, transparent); box-shadow: inset 0 -2px 0 var(--neg); }
 #note-body {
