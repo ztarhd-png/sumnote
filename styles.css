@@ -41,7 +41,7 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --glide: cubic-bezier(0.22, 1, 0.36, 1);      /* 빠르게 출발해 길게 미끄러지며 멈춤 */
   --glide-out: cubic-bezier(0.55, 0, 0.1, 1);   /* 닫을 때: 부드럽게 출발해 빠져나감 */
-  --line-h: 34px;
+  --line-h: 26px;
   color-scheme: light;
 }
 
