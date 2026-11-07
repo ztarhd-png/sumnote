@@ -31,7 +31,9 @@
     if (!raw || /^(#|\/\/)/.test(raw)) return { type: 'ignored', value: null, spans: [] };
     if (raw === '---') return { type: 'subtotal', value: null, spans: [] };
     // 날짜는 같은 길이의 공백으로 바꿔 글자 위치를 그대로 둔다.
-    const text = raw.replace(datePattern, (m, p) => p + ' '.repeat(m.length - p.length));
+    // 줄 앞 번호(1. · 10. · 2))도 금액이 아니므로 같은 길이의 공백으로 바꾼다. 3.5 같은 소수는 그대로.
+    const text = raw.replace(datePattern, (m, p) => p + ' '.repeat(m.length - p.length))
+      .replace(/^(?:\s*\d{1,3}[.)](?!\d))+/, m => ' '.repeat(m.length));
     if (!text.trim()) return { type: 'ignored', value: null, spans: [] };
     const value = expression(text);
     if (value !== null) {
