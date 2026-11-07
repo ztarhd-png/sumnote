@@ -1,19 +1,10 @@
 (function (root) {
   'use strict';
   const numberSource = '(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?';
-  const unitSource = numberSource + '(?:천(?:억|만)?|억|만)';
-  const amountSource = '(?:(?:' + unitSource + ')+(?:' + numberSource + ')?|' + numberSource + ')(?:원)?';
-  function amount(text) {
-    let sum = 0, chunk = 0, pending = 0;
-    const parts = text.replace(/[,원]/g, '').match(/\d+(?:\.\d+)?|억|만|천/g) || [];
-    for (const part of parts) {
-      if (part === '천') { chunk += pending * 1000; pending = 0; }
-      else if (part === '만') { sum += (chunk + pending) * 1e4; chunk = 0; pending = 0; }
-      else if (part === '억') { sum = (sum + chunk + pending) * 1e8; chunk = 0; pending = 0; }
-      else pending = Number(part);
-    }
-    return sum + chunk + pending;
-  }
+  // 금액은 숫자(쉼표·소수점)와 붙여 쓴 '원'까지만. 6억·3만·2천처럼 숫자 바로 뒤에 글자가 붙으면
+  // 표기용 글자로 보고 계산하지 않는다(원만 예외).
+  const amountSource = numberSource + '(?:원)?';
+  function amount(text) { return Number(text.replace(/[,원]/g, '')); }
 
   function expression(source) {
     const s = source.replace(/−/g, '-').trim();
@@ -48,9 +39,9 @@
       return { type: 'value', value, spans: [[lead + a, lead + b, Math.sign(value)]] };
     }
     // An invalid expression must never silently turn into its last operand.
-    if (/^[\d\s,.원억만천()+*/−-]+$/.test(text) && /[+*/()-]/.test(text)) return { type: 'invalid', value: null, spans: [] };
+    if (/^[\d\s,.원()+*/−-]+$/.test(text) && /[+*/()-]/.test(text)) return { type: 'invalid', value: null, spans: [] };
     // 한 줄의 금액은 모두 더한다(SumsApp과 같음: '국세 24990 지방세 2490' → 27,480).
-    // 3월·4대보험·25년·2잔·10%·14:30처럼 글자나 기호에 붙은 숫자는 금액이 아니다.
+    // 6억·3만·3월·4대보험·25년·2잔·10%·14:30처럼 글자나 기호가 바로 뒤에 붙은 숫자는 금액이 아니다(원은 예외).
     const s = text.replace(/−/g, '-');
     const attached = /[A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ%:]/;
     const spans = [];

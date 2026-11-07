@@ -17,7 +17,7 @@
   const SAMPLE_FOLDER = '일상 기록';
   const SAMPLES = [
     { title: '이번 주 장보기', body: ['사과 6,000', '우유 3,200', '식빵 4,500', '달걀 7,800', '---', '주방 세제 4,900', '할인 -2,000'].join('\n'), inFolder: true },
-    { title: '제주 여행 준비', body: ['항공권 178,000', '숙소 24만원', '렌터카 65,000', '# 설레는 여행 준비'].join('\n'), inFolder: false },
+    { title: '제주 여행 준비', body: ['항공권 178,000', '숙소 240,000원', '렌터카 65,000', '# 설레는 여행 준비'].join('\n'), inFolder: false },
     { title: '작은 모임 정산', body: ['저녁 78,000', '카페 24,000', '간식 12,000'].join('\n'), inFolder: true }
   ];
   function starter() {
