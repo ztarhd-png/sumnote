@@ -43,12 +43,15 @@
     // 한 줄의 금액은 모두 더한다(SumsApp과 같음: '국세 24990 지방세 2490' → 27,480).
     // 6억·12,000원·3월·4대보험·25년·2잔·10%·14:30처럼 글자나 기호가 바로 뒤에 붙은 숫자는 금액이 아니다.
     const s = text.replace(/−/g, '-');
-    const attached = /[A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ%:]/;
+    // 마운트타입4·P5B3-KR·A4처럼 글자 바로 뒤에 붙은 숫자도 글자의 일부다:
+    // 앞에 글자가 붙었거나, 뒤에 '-'나 '/'를 사이에 두고 글자가 이어지면 뺀다.
+    const attached = /[A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ%:_]/, code = /[A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ_:]/;
     const spans = [];
     let sum = 0;
     for (const m of s.matchAll(new RegExp('[+-]?' + amountSource, 'g'))) {
-      const after = s[m.index + m[0].length] || '', before = m.index ? s[m.index - 1] : '';
-      if (attached.test(after) || before === ':') continue;
+      const end = m.index + m[0].length, after = s[end] || '', before = m.index ? s[m.index - 1] : '';
+      if (attached.test(after) || code.test(before)) continue;
+      if (/[-/]/.test(after) && attached.test(s[end + 1] || '')) continue;
       const n = amount(m[0].replace(/^[+-]/, '')) * (m[0][0] === '-' ? -1 : 1);
       sum += n;
       spans.push([lead + m.index, lead + m.index + m[0].length, Math.sign(n)]);
