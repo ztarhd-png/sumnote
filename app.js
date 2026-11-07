@@ -16,9 +16,9 @@
   }
   const SAMPLE_FOLDER = '일상 기록';
   const SAMPLES = [
-    { title: '이번 주 장보기', body: ['사과 6,000', '우유 3,200', '식빵 4,500', '달걀 7,800', '---', '주방 세제 4,900', '할인 -2,000'].join('\n'), inFolder: true },
-    { title: '제주 여행 준비', body: ['항공권 178,000', '숙소 240,000', '렌터카 65,000', '# 설레는 여행 준비'].join('\n'), inFolder: false },
-    { title: '작은 모임 정산', body: ['저녁 78,000', '카페 24,000', '간식 12,000'].join('\n'), inFolder: true }
+    { title: '이번 주 장보기', body: ['이번 주 장보기', '사과 6,000', '우유 3,200', '식빵 4,500', '달걀 7,800', '---', '주방 세제 4,900', '할인 -2,000'].join('\n'), inFolder: true },
+    { title: '제주 여행 준비', body: ['제주 여행 준비', '항공권 178,000', '숙소 240,000', '렌터카 65,000', '# 설레는 여행 준비'].join('\n'), inFolder: false },
+    { title: '작은 모임 정산', body: ['작은 모임 정산', '저녁 78,000', '카페 24,000', '간식 12,000'].join('\n'), inFolder: true }
   ];
   function starter() {
     const folder = id();
@@ -27,9 +27,21 @@
   // 처음 열었을 때 넣어 둔 샘플을 손대지 않은 상태인지 (가져오기 때 샘플을 대신 지우기 위해)
   function onlySamples() {
     return state.notes.length > 0 && state.folders.every(f => f.name === SAMPLE_FOLDER)
-      && state.notes.every(n => SAMPLES.some(s => s.title === n.title && s.body === n.body));
+      && state.notes.every(n => SAMPLES.some(s => s.body === n.body));
   }
-  try { const saved = localStorage.getItem(KEY); if (saved) { state = JSON.parse(saved); if (!validData(state)) throw Error(); } else state = starter(); }
+  // 노트 제목은 본문의 첫 줄이다. 예전처럼 제목을 따로 가진 노트는 제목을 첫 줄로 옮긴다(한 번만, 합계는 그대로).
+  function titleFirst(notes) {
+    let moved = false;
+    for (const n of notes) {
+      const title = n.title.trim();
+      if (title && title !== titleOf(n.body)) { n.body = title + (n.body ? '\n' + n.body : ''); moved = true; }
+      n.title = titleOf(n.body);
+    }
+    return moved;
+  }
+  const nameOf = n => n.title || '새 노트';
+  function titleOf(body) { return body.split('\n', 1)[0].trim(); }
+  try { const saved = localStorage.getItem(KEY); if (saved) { state = JSON.parse(saved); if (!validData(state)) throw Error(); titleFirst(state.notes); } else state = starter(); }
   catch (_) { state = { version: 1, folders: [], notes: [] }; storageBroken = true; }
   function toast(message) { $('toast').textContent = message; $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true; }, 3500); }
   function persist() {
@@ -56,7 +68,7 @@
   const folderName = folderId => state.folders.find(f => f.id === folderId)?.name || '폴더 없음';
   function noteRow(note, showFolder) {
     const row = element('button', 'tree-note' + (note.id === currentNote ? ' active' : ''));
-    const name = element('span', 'tree-name', note.title || '이름 없는 노트');
+    const name = element('span', 'tree-name', nameOf(note));
     if (showFolder) name.append(element('small', '', folderName(note.folderId)));
     const sum = total(note);
     row.append(name, element('span', 'tree-sum' + (sum < 0 ? ' neg' : ''), fmt(sum)));
@@ -143,7 +155,7 @@
     const n = active();
     $('editor').hidden = $('total-bar').hidden = $('edit-note').hidden = !n;
     $('empty-state').hidden = !!n;
-    $('note-heading').textContent = n ? n.title || '이름 없는 노트' : '숨노트';
+    $('note-heading').textContent = n ? nameOf(n) : '숨노트';
     $('note-heading').disabled = !n;
     if (!n) return;
     $('note-body').value = n.body;
@@ -151,6 +163,8 @@
   }
   function closeSidebar() { $('sidebar').classList.remove('open'); $('menu-toggle').setAttribute('aria-expanded', 'false'); }
   function openNote(noteId, closeMenu) {
+    const prev = active();
+    if (prev && prev.id !== noteId && !prev.body.trim()) { state.notes = state.notes.filter(n => n !== prev); persist(); }
     currentNote = noteId;
     const n = active(); if (n) openOnly(n.folderId || '');
     saveUi();
@@ -173,13 +187,12 @@
     $('form-dialog').showModal(); setTimeout(() => { $('name-input').focus(); $('name-input').select(); }, 30);
   }
   function confirmDelete(title, description, action) { deleteAction = action; $('confirm-title').textContent = title; $('confirm-description').textContent = description; $('confirm-dialog').showModal(); $('cancel-delete').focus(); }
-  // inFolder를 주면(폴더 줄의 +) 그 폴더에 바로 만들고, 없으면 넣을 폴더도 고른다.
+  // 새 노트는 묻지 않고 바로 열린다. 첫 줄에 쓴 글이 제목이 된다.
+  // inFolder를 주면(폴더 줄의 +) 그 폴더에, 아니면 지금 보던 노트의 폴더에 만든다.
   function newNote(inFolder) {
-    const fixed = typeof inFolder === 'string';
-    askName(fixed ? `${folderName(inFolder || null)}에 새 노트` : '새 노트', '', (name, folderId) => {
-      const n = { id: id(), title: name, body: '', folderId: fixed ? inFolder || null : folderId, updatedAt: new Date().toISOString() };
-      state.notes.push(n); query = ''; $('search').value = ''; persist(); openNote(n.id, true); $('note-body').focus();
-    }, fixed ? undefined : active()?.folderId || '');
+    const folderId = typeof inFolder === 'string' ? inFolder || null : active()?.folderId || null;
+    const n = { id: id(), title: '', body: '', folderId, updatedAt: new Date().toISOString() };
+    state.notes.push(n); query = ''; $('search').value = ''; persist(); openNote(n.id, true); $('note-body').focus();
   }
   $('name-form').onsubmit = event => {
     event.preventDefault(); const name = $('name-input').value.trim();
@@ -192,22 +205,22 @@
   $('confirm-delete').onclick = () => { $('confirm-dialog').close(); deleteAction(); };
   $('new-note').onclick = $('empty-new').onclick = () => newNote();
   $('new-folder').onclick = () => askName('새 폴더', '', name => { const f = { id: id(), name }; state.folders.push(f); openOnly(f.id); persist(); saveUi(); renderTree(); });
-  // 노트 편집: 이름 · 폴더 이동 · CSV · 삭제
+  // 노트 편집: 폴더 이동 · CSV · 삭제
   $('edit-note').onclick = $('note-heading').onclick = () => {
     const n = active(); if (!n) return;
-    $('edit-title').value = n.title; fillFolders($('edit-folder'), n.folderId);
+    fillFolders($('edit-folder'), n.folderId);
     $('edit-date').textContent = dateLabel(n.updatedAt) + ' 수정';
     $('edit-dialog').showModal();
   };
   $('edit-form').onsubmit = event => {
     event.preventDefault(); const n = active(); if (!n) return;
-    const title = $('edit-title').value.trim() || '이름 없는 노트', folderId = $('edit-folder').value || null;
-    if (title !== n.title || folderId !== n.folderId) { n.title = title; n.folderId = folderId; openOnly(folderId || ''); saveUi(); changeNote(); renderEditor(); }
+    const folderId = $('edit-folder').value || null;
+    if (folderId !== n.folderId) { n.folderId = folderId; openOnly(folderId || ''); saveUi(); changeNote(); renderEditor(); }
     $('edit-dialog').close();
   };
   $('delete-note').onclick = () => {
     const n = active(); if (!n) return; $('edit-dialog').close();
-    confirmDelete('노트를 삭제할까요?', `‘${n.title || '이름 없는 노트'}’ 노트를 삭제하면 되돌릴 수 없어요.`, () => { state.notes = state.notes.filter(v => v.id !== n.id); persist(); openNote(latest()); });
+    confirmDelete('노트를 삭제할까요?', `‘${nameOf(n)}’ 노트를 삭제하면 되돌릴 수 없어요.`, () => { state.notes = state.notes.filter(v => v.id !== n.id); persist(); openNote(latest()); });
   };
   // 폴더 편집: 이름 · 삭제 (노트는 '폴더 없음'으로 남는다)
   let editingFolder = null;
@@ -237,7 +250,12 @@
   if (window.ResizeObserver) new ResizeObserver(refit).observe($('note-ink'));
   addEventListener('resize', refit); addEventListener('orientationchange', () => setTimeout(refit, 200));
   document.fonts?.ready.then(() => active() && fitLines());
-  $('note-body').oninput = () => { const n = active(); if (n) { n.body = $('note-body').value; renderLines(); changeNote(); } };
+  $('note-body').oninput = () => {
+    const n = active(); if (!n) return;
+    n.body = $('note-body').value; n.title = titleOf(n.body);
+    $('note-heading').textContent = nameOf(n);
+    renderLines(); changeNote();
+  };
   $('search').oninput = () => { query = $('search').value.trim().toLocaleLowerCase(); renderTree(); };
   $('menu-toggle').onclick = () => { const open = $('sidebar').classList.toggle('open'); $('menu-toggle').setAttribute('aria-expanded', String(open)); };
   // 바깥을 누르면 메뉴를 닫는다. 폴더를 누르면 나무를 다시 그려 누른 요소가 문서에서 빠지므로,
@@ -283,6 +301,7 @@
       const folderIds = new Map(data.folders.map(f => [f.id, id()]));
       const folders = data.folders.map(f => ({ id: folderIds.get(f.id), name: f.name }));
       const notes = data.notes.map(n => ({ id: id(), title: n.title, body: n.body, folderId: folderIds.get(n.folderId) || null, updatedAt: n.updatedAt }));
+      titleFirst(notes);
       const replaceSamples = onlySamples();
       const base = replaceSamples ? { folders: [], notes: [] } : state;
       const merged = { version: 1, folders: [...base.folders, ...folders], notes: [...base.notes, ...notes] };

@@ -24,11 +24,18 @@ const cases = [
   ['KR-3 2000',2000], ['SKU_123 4000',4000], ['3-KR',null], ['5000-3000',2000], ['환불 -5000',-5000]
 ];
 for (const [line, expected] of cases) assert.equal(parseLine(line).value, expected, line);
-const note = parseNote('식비 12000\n커피 3000\n---\n환불 -5000\n---\n2*1000\n# 9000');
+// 첫 줄은 제목: 숫자가 있어도 합계에 넣지 않는다.
+const note = parseNote('ㅇㅇㅇ 501-504\n식비 12000\n커피 3000\n---\n환불 -5000\n---\n2*1000\n# 9000');
 assert.equal(note.total, 12000);
-assert.equal(note.lines[2].value, 15000);
-assert.equal(note.lines[4].value, -5000);
-assert.equal(parseNote('---\n---').total, 0);
+assert.equal(note.lines[0].type, 'title');
+assert.equal(note.lines[3].value, 15000);
+assert.equal(note.lines[5].value, -5000);
+assert.equal(parseNote('제목\n---\n---').total, 0);
+assert.equal(parseNote('점심 12000').total, 0);
+assert.equal(parseNote('').total, 0);
+const { titleOf } = require('./parser.js');
+assert.equal(titleOf('  장보기 \n사과 6000'), '장보기');
+assert.equal(titleOf(''), '');
 // 칠할 위치: 합계에 들어간 숫자만, 원래 줄의 글자 위치 그대로
 const mark = l => parseLine(l).spans.map(([a, b, sign]) => l.slice(a, b) + (sign < 0 ? '(-)' : ''));
 const marks = [

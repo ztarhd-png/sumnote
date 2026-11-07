@@ -59,9 +59,12 @@
     if (!spans.length) return { type: 'ignored', value: null, spans };
     return { type: 'value', value: Number.isFinite(sum) ? sum : null, spans };
   }
+  // 노트의 첫 줄은 제목이다. 제목은 합계에 넣지 않는다.
+  function titleOf(text) { return text.split('\n', 1)[0].trim(); }
   function parseNote(text) {
     let total = 0, section = 0;
-    const lines = text.split('\n').map(raw => {
+    const lines = text.split('\n').map((raw, i) => {
+      if (i === 0) return { raw, type: 'title', value: null, spans: [] };
       const parsed = parseLine(raw);
       if (parsed.type === 'subtotal') { parsed.value = section; section = 0; }
       else if (parsed.value !== null) { total += parsed.value; section += parsed.value; }
@@ -69,7 +72,7 @@
     });
     return { lines, total };
   }
-  const api = { parseLine, parseNote, expression };
+  const api = { parseLine, parseNote, expression, titleOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.SumParser = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
