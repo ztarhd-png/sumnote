@@ -294,8 +294,9 @@ main { flex: 1; min-width: 0; margin-left: 280px; }
   background-position: 0 6px;
 }
 #line-numbers { width: 44px; flex-shrink: 0; text-align: center; font-size: 12px; line-height: var(--line-h); color: var(--ink-3); opacity: 0.7; user-select: none; font-variant-numeric: tabular-nums; }
-/* 본문: 투명한 입력칸 아래에 같은 글자를 깔고, 합계에 들어간 숫자만 칠한다.
-   두 층은 글꼴·크기·간격이 1px도 달라지면 안 되므로 같은 규칙을 쓴다. */
+/* 본문: 글자는 입력칸이 직접 그린다(키보드 조합 중인 한글이 두 번 보이지 않도록).
+   입력칸 아래 층은 글자를 그리지 않고, 합계에 들어간 숫자 자리에만 파랑/빨강 형광펜을 깐다.
+   두 층은 글꼴·크기·간격이 같아야 형광펜이 숫자 자리에 맞으므로 같은 규칙을 쓴다. */
 .ink-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
 #note-body, #note-ink {
   margin: 0; padding: 0 20px 0 0; border: 0;
@@ -309,19 +310,19 @@ main { flex: 1; min-width: 0; margin-left: 280px; }
 #note-ink .ink-line { min-height: var(--line-h); }
 #note-ink {
   position: absolute; top: 0; left: 0; right: 0; pointer-events: none; user-select: none;
-  color: var(--ink); will-change: transform;
+  color: transparent; -webkit-text-fill-color: transparent; will-change: transform;
 }
-#note-ink .pos { color: var(--pos); }
-#note-ink .neg { color: var(--neg); }
+#note-ink .pos, #note-ink .neg { border-radius: 4px; }
+#note-ink .pos { background: rgba(11, 95, 191, 0.16); background: color-mix(in srgb, var(--pos) 18%, transparent); box-shadow: inset 0 -2px 0 var(--pos); }
+#note-ink .neg { background: rgba(196, 38, 46, 0.16); background: color-mix(in srgb, var(--neg) 18%, transparent); box-shadow: inset 0 -2px 0 var(--neg); }
 #note-body {
   position: relative; display: block; width: 100%; min-height: calc(100dvh - var(--topbar-h) - 140px);
   border-radius: 0; outline: none; background: transparent; resize: none; -webkit-appearance: none; appearance: none;
   overflow: hidden; scrollbar-width: none;
-  color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--ink);
+  color: var(--ink); caret-color: var(--ink);
 }
 #note-body::-webkit-scrollbar { display: none; }
-#note-body::placeholder { color: var(--ink-3); -webkit-text-fill-color: var(--ink-3); opacity: 1; }
-#note-body::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+#note-body::placeholder { color: var(--ink-3); opacity: 1; }
 .pos-text { color: var(--pos); }
 .neg-text { color: var(--neg); }
 code { padding: 2px 6px; border-radius: 6px; background: var(--fill); font-family: inherit; font-size: inherit; font-weight: 600; }

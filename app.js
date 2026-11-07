@@ -148,7 +148,8 @@
   function fitLines() {
     const rows = $('note-ink').children, numbers = $('line-numbers').children;
     for (let i = 0; i < rows.length; i++) if (numbers[i]) numbers[i].style.height = rows[i].offsetHeight + 'px';
-    $('note-body').style.height = $('note-ink').offsetHeight + 8 + 'px';
+    const height = $('note-ink').offsetHeight + 8 + 'px';
+    if ($('note-body').style.height !== height) $('note-body').style.height = height;
     syncInk();
   }
   function renderEditor() {
@@ -163,6 +164,7 @@
   }
   function closeSidebar() { $('sidebar').classList.remove('open'); $('menu-toggle').setAttribute('aria-expanded', 'false'); }
   function openNote(noteId, closeMenu) {
+    flushSave();
     const prev = active();
     if (prev && prev.id !== noteId && !prev.body.trim()) { state.notes = state.notes.filter(n => n !== prev); persist(); }
     currentNote = noteId;
@@ -250,12 +252,19 @@
   if (window.ResizeObserver) new ResizeObserver(refit).observe($('note-ink'));
   addEventListener('resize', refit); addEventListener('orientationchange', () => setTimeout(refit, 200));
   document.fonts?.ready.then(() => active() && fitLines());
+  // 타자 중에는 화면(형광펜·합계)만 바로 고치고, 저장과 왼쪽 메뉴 갱신은 손을 멈춘 뒤에 한 번 한다.
+  // 앱을 내리거나 다른 노트로 옮기면 기다리지 않고 바로 저장한다.
+  let saveTimer = null;
+  function flushSave() { if (!saveTimer) return; clearTimeout(saveTimer); saveTimer = null; persist(); renderTree(); }
   $('note-body').oninput = () => {
     const n = active(); if (!n) return;
-    n.body = $('note-body').value; n.title = titleOf(n.body);
+    n.body = $('note-body').value; n.title = titleOf(n.body); n.updatedAt = new Date().toISOString();
     $('note-heading').textContent = nameOf(n);
-    renderLines(); changeNote();
+    renderLines();
+    clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 400);
   };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
+  addEventListener('pagehide', flushSave);
   $('search').oninput = () => { query = $('search').value.trim().toLocaleLowerCase(); renderTree(); };
   $('menu-toggle').onclick = () => { const open = $('sidebar').classList.toggle('open'); $('menu-toggle').setAttribute('aria-expanded', String(open)); };
   // 바깥을 누르면 메뉴를 닫는다. 폴더를 누르면 나무를 다시 그려 누른 요소가 문서에서 빠지므로,
