@@ -6,21 +6,6 @@
   const amountSource = numberSource;
   function amount(text) { return Number(text.replace(/,/g, '')); }
 
-  function expression(source) {
-    const s = source.replace(/−/g, '-').trim();
-    const tokens = s.match(new RegExp(amountSource + '|[()+*/-]', 'g')) || [];
-    if (tokens.join('') !== s.replace(/\s/g, '') || !tokens.length) return null;
-    let i = 0;
-    function atom() {
-      if (tokens[i] === '+' || tokens[i] === '-') { const sign = tokens[i++] === '-' ? -1 : 1; return sign * atom(); }
-      if (tokens[i] === '(') { i++; const v = add(); if (tokens[i++] !== ')') throw Error(); return v; }
-      if (!tokens[i] || !/^\d/.test(tokens[i])) throw Error();
-      return amount(tokens[i++]);
-    }
-    function multiply() { let v = atom(); while (tokens[i] === '*' || tokens[i] === '/') { const op = tokens[i++], b = atom(); v = op === '*' ? v * b : v / b; } return v; }
-    function add() { let v = multiply(); while (tokens[i] === '+' || tokens[i] === '-') { const op = tokens[i++], b = multiply(); v = op === '+' ? v + b : v - b; } return v; }
-    try { const value = add(); return i === tokens.length && Number.isFinite(value) ? value : null; } catch (_) { return null; }
-  }
   // 날짜(2025.8.18. · 2025-08-22 · 2025/8/1 · 9.1.)는 금액이 아니므로 계산 전에 지운다.
   // (lookbehind 없이 작성: 오래된 iOS Safari에서도 동작)
   const datePattern = /(^|[^\d.,])(?:\d{4}\s?[./-]\s?\d{1,2}\s?[./-]\s?\d{1,2}\.?|\d{1,2}\.\d{1,2}\.)(?!\d)/g;
@@ -35,13 +20,6 @@
     const text = raw.replace(datePattern, (m, p) => p + ' '.repeat(m.length - p.length))
       .replace(/^(?:\s*\d{1,3}[.)](?!\d))+/, m => ' '.repeat(m.length));
     if (!text.trim()) return { type: 'ignored', value: null, spans: [] };
-    const value = expression(text);
-    if (value !== null) {
-      const a = text.search(/\S/), b = text.replace(/\s+$/, '').length;
-      return { type: 'value', value, spans: [[lead + a, lead + b, Math.sign(value)]] };
-    }
-    // An invalid expression must never silently turn into its last operand.
-    if (/^[\d\s,.()+*/−-]+$/.test(text) && /[+*/()-]/.test(text)) return { type: 'invalid', value: null, spans: [] };
     // 한 줄의 금액은 모두 더한다(SumsApp과 같음: '국세 24990 지방세 2490' → 27,480).
     // 6억·12,000원·3월·4대보험·25년·2잔·10%·14:30처럼 글자나 기호가 바로 뒤에 붙은 숫자는 금액이 아니다.
     const s = text.replace(/−/g, '-');
@@ -56,6 +34,10 @@
       if (/[-/]/.test(after) && attached.test(s[end + 1] || '')) continue;
       // 2013~2014 · 3 ~ 5 · 10,000~20,000처럼 물결(~) 양쪽 숫자는 범위 표기이므로 뺀다(띄어 써도 같음).
       if (/^\s*[~～〜]/.test(s.slice(end)) || /[~～〜]\s*$/.test(s.slice(0, m.index))) continue;
+      // 사칙연산은 하지 않는다. 5000-3000 · 12000*3 · 1/2처럼 기호로 숫자끼리 붙여 쓴 것은 글이다.
+      // 5000 -3000처럼 띄우면 따로 떨어진 숫자 두 개(5000과 -3000)다.
+      // 연산 기호가 숫자에 바로 붙어 있으면 뺀다. (숫자 자기 앞의 부호 -3000 · +3000은 숫자의 일부라 괜찮다.)
+      if (/[+\-*/×÷=^]/.test(after) || /[+\-*/×÷=^]/.test(before)) continue;
       // 4,4 · 1,0000 · 1.2.3 · 12,34,567처럼 쉼표·점이 천 단위/소수점 규칙에 맞지 않아
       // 숫자가 쪼개진 경우: 쪼개진 조각은 모두 금액이 아니다(조각이 다른 숫자에 붙어 있으면 뺀다).
       const glued = (ch, next) => /\d/.test(ch) || (/[.,]/.test(ch) && /\d/.test(next || ''));
@@ -80,7 +62,7 @@
     });
     return { lines, total };
   }
-  const api = { parseLine, parseNote, expression, titleOf };
+  const api = { parseLine, parseNote, titleOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.SumParser = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
