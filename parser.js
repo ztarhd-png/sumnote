@@ -54,6 +54,8 @@
       const end = m.index + m[0].length, after = s[end] || '', before = m.index ? s[m.index - 1] : '';
       if (attached.test(after) || code.test(before)) continue;
       if (/[-/]/.test(after) && attached.test(s[end + 1] || '')) continue;
+      // 2013~2014 · 3 ~ 5 · 10,000~20,000처럼 물결(~) 양쪽 숫자는 범위 표기이므로 뺀다(띄어 써도 같음).
+      if (/^\s*[~～〜]/.test(s.slice(end)) || /[~～〜]\s*$/.test(s.slice(0, m.index))) continue;
       // 4,4 · 1,0000 · 1.2.3 · 12,34,567처럼 쉼표·점이 천 단위/소수점 규칙에 맞지 않아
       // 숫자가 쪼개진 경우: 쪼개진 조각은 모두 금액이 아니다(조각이 다른 숫자에 붙어 있으면 뺀다).
       const glued = (ch, next) => /\d/.test(ch) || (/[.,]/.test(ch) && /\d/.test(next || ''));
