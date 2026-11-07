@@ -294,6 +294,19 @@
     if (!composing && !event.isComposing) growOnly();
     scheduleSave();
   };
+  // 아이폰 키보드가 올라오면 화면(보이는 영역)이 아래로 밀려 위쪽 막대가 화면 밖으로 나간다.
+  // 보이는 영역이 밀린 만큼 위쪽 막대(제목·저장)와 노트합계를 따라 내려 항상 보이게 한다.
+  // 글자는 건드리지 않고 두 막대의 위치(transform)만 바꾼다.
+  if (window.visualViewport) {
+    let shift = 0;
+    const follow = () => {
+      const next = Math.max(0, Math.round(visualViewport.offsetTop));
+      if (next === shift) return; shift = next;
+      const t = shift ? `translate3d(0, ${shift}px, 0)` : '';
+      document.querySelector('.topbar').style.transform = t; $('total-bar').style.transform = t;
+    };
+    visualViewport.addEventListener('resize', follow); visualViewport.addEventListener('scroll', follow);
+  }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
   addEventListener('pagehide', flushSave);
   $('search').oninput = () => { query = $('search').value.trim().toLocaleLowerCase(); renderTree(); };
