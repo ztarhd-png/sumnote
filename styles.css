@@ -313,6 +313,7 @@ main { flex: 1; min-width: 0; margin-left: 280px; }
   color: transparent; -webkit-text-fill-color: transparent; will-change: transform;
 }
 #note-ink .pos, #note-ink .neg { border-radius: 4px; }
+#note-ink.paused { visibility: hidden; }
 #note-ink .pos { background: rgba(11, 95, 191, 0.16); background: color-mix(in srgb, var(--pos) 18%, transparent); box-shadow: inset 0 -2px 0 var(--pos); }
 #note-ink .neg { background: rgba(196, 38, 46, 0.16); background: color-mix(in srgb, var(--neg) 18%, transparent); box-shadow: inset 0 -2px 0 var(--neg); }
 #note-body {

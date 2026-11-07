@@ -48,7 +48,7 @@
     // 저장 상태는 문제가 있을 때만 위쪽 막대에 보인다.
     const warn = text => { $('save-status').textContent = text; $('save-status').hidden = false; };
     if (storageBroken) { warn('저장 확인 필요'); return false; }
-    try { localStorage.setItem(KEY, JSON.stringify(state)); $('save-status').hidden = true; return true; }
+    try { localStorage.setItem(KEY, JSON.stringify(state)); if (!$('save-status').hidden) $('save-status').hidden = true; return true; }
     catch (_) { warn('저장 공간 부족'); toast('저장하지 못했어요. JSON 백업으로 노트를 보관해 주세요.'); return false; }
   }
   function active() { return state.notes.find(n => n.id === currentNote); }
@@ -254,14 +254,36 @@
   document.fonts?.ready.then(() => active() && fitLines());
   // 타자 중에는 화면(형광펜·합계)만 바로 고치고, 저장과 왼쪽 메뉴 갱신은 손을 멈춘 뒤에 한 번 한다.
   // 앱을 내리거나 다른 노트로 옮기면 기다리지 않고 바로 저장한다.
-  let saveTimer = null;
-  function flushSave() { if (!saveTimer) return; clearTimeout(saveTimer); saveTimer = null; persist(); renderTree(); }
-  $('note-body').oninput = () => {
-    const n = active(); if (!n) return;
+  // 한글 조합 중(ㄱ→가→각)에는 화면을 전혀 건드리지 않는다. 아이폰 키보드는 조합 중인 글자를
+  // 직접 그리는데, 그 사이에 문서를 고치면 글자가 두 번 보이거나 사라졌다 생긴다.
+  // 형광펜·줄번호·제목·왼쪽 메뉴는 조합이 끝난 뒤에 한 번에 맞춘다.
+  let saveTimer = null, composing = false;
+  function flushSave() {
+    if (!saveTimer) return; clearTimeout(saveTimer); saveTimer = null;
+    persist(); if (!composing) renderTree();
+  }
+  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 400); }
+  function takeInput() {
+    const n = active(); if (!n) return null;
     n.body = $('note-body').value; n.title = titleOf(n.body); n.updatedAt = new Date().toISOString();
+    return n;
+  }
+  function refreshAfterTyping() {
+    const n = active(); if (!n) return;
     $('note-heading').textContent = nameOf(n);
     renderLines();
-    clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 400);
+  }
+  // 조합 중 줄이 넘쳐도 글자가 가려지지 않게 높이만 늘린다(글자·문서는 건드리지 않음).
+  function growOnly() { const b = $('note-body'); if (b.scrollHeight > b.clientHeight) b.style.height = b.scrollHeight + 'px'; }
+  $('note-body').addEventListener('compositionstart', () => { composing = true; $('note-ink').classList.add('paused'); });
+  $('note-body').addEventListener('compositionend', () => {
+    composing = false; $('note-ink').classList.remove('paused');
+    if (takeInput()) { refreshAfterTyping(); scheduleSave(); }
+  });
+  $('note-body').oninput = event => {
+    if (!takeInput()) return;
+    if (composing || event.isComposing) growOnly(); else refreshAfterTyping();
+    scheduleSave();
   };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
   addEventListener('pagehide', flushSave);
