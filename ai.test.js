@@ -65,6 +65,74 @@ test('아무것도 안 바뀌면 changed는 false', () => {
   assert.strictEqual(run(plan({ order: [2, 3, 4, 5, 6] })).preview.changed, false);
 });
 
+// 되돌리기 기록
+const stamp = (i, extra) => ({ id: 'h' + i, at: NOW, summary: 's' + i, title: 't', ...extra });
+function chain(steps) { // steps: 상태를 고치는 함수들. 최신이 앞인 기록과 각 시점의 상태를 돌려준다.
+  let s = base(); const states = [s], history = [];
+  steps.forEach((step, i) => { const n = JSON.parse(JSON.stringify(s)); step(n); history.unshift(Ai.historyEntry(s, n, stamp(i))); s = n; states.push(s); });
+  return { states, history, now: s };
+}
+const edit = (i, text) => s => { s.notes[i].body = text; s.notes[i].title = text.split('\n')[0]; };
+test('기록은 바뀐 노트의 이전 모습만 담는다', () => {
+  const { history } = chain([edit(0, 'A\n1')]);
+  assert.deepStrictEqual(history[0].notes.map(n => n.id), ['a']);
+  assert.strictEqual(history[0].notes[0].body, body);
+  assert.deepStrictEqual(history[0].createdNotes, []);
+});
+test('한 단계씩, 여러 단계를 한 번에 되돌린다', () => {
+  const { states, history, now } = chain([edit(0, 'A\n1'), edit(0, 'A\n2'), edit(1, 'B\n3')]);
+  assert.deepStrictEqual(Ai.rollbackState(now, history.slice(0, 1)), states[2]);
+  assert.deepStrictEqual(Ai.rollbackState(now, history.slice(0, 2)), states[1]);
+  assert.deepStrictEqual(Ai.rollbackState(now, history.slice(0, 3)), states[0]);
+});
+test('되돌리기는 원본을 바꾸지 않는다', () => {
+  const { history, now } = chain([edit(0, 'A\n1')]);
+  const copy = JSON.stringify(now);
+  Ai.rollbackState(now, history);
+  assert.strictEqual(JSON.stringify(now), copy);
+});
+test('AI가 만든 노트와 폴더는 지운다', () => {
+  const { states, history, now } = chain([s => { s.notes.push({ id: 'c', title: '새', body: '새\n1', folderId: 'f2', updatedAt: NOW }); s.folders.push({ id: 'f2', name: '새폴더' }); }]);
+  assert.deepStrictEqual(history[0].createdNotes, ['c']);
+  assert.deepStrictEqual(history[0].createdFolders, ['f2']);
+  assert.deepStrictEqual(Ai.rollbackState(now, history), states[0]);
+});
+test('AI가 건드리지 않은 노트의 직접 수정과 새 노트는 남는다', () => {
+  const { history, now } = chain([edit(0, 'A\n1')]);
+  now.notes[1].body = '여행\n직접 고침 1'; now.notes.push({ id: 'mine', title: '내것', body: '내것', folderId: null, updatedAt: NOW });
+  const r = Ai.rollbackState(now, history);
+  assert.strictEqual(r.notes[0].body, body);
+  assert.strictEqual(r.notes[1].body, '여행\n직접 고침 1');
+  assert.ok(r.notes.some(n => n.id === 'mine'));
+  assert.strictEqual(Ai.editedSince(now, history), false);
+});
+test('AI가 고친 노트를 직접 고쳤으면 알려 준다', () => {
+  const { history, now } = chain([edit(0, 'A\n1')]);
+  assert.strictEqual(Ai.editedSince(now, history), false);
+  now.notes[0].body += '\n더 씀';
+  assert.strictEqual(Ai.editedSince(now, history), true);
+});
+test('여러 번 정리한 노트는 가장 최근 정리와만 비교한다', () => {
+  const { history, now } = chain([edit(0, 'A\n1'), edit(0, 'A\n2')]);
+  assert.strictEqual(Ai.editedSince(now, history), false);
+});
+test('직접 지운 노트도 되돌리면 돌아온다', () => {
+  const { history, now } = chain([edit(0, 'A\n1')]);
+  now.notes = now.notes.filter(n => n.id !== 'a');
+  assert.strictEqual(Ai.editedSince(now, history), true);
+  assert.strictEqual(Ai.rollbackState(now, history).notes.find(n => n.id === 'a').body, body);
+});
+test('지운 폴더에 있던 노트는 폴더 없음으로 돌아오고, 직접 쓰는 AI 폴더는 남긴다', () => {
+  const { history, now } = chain([edit(0, 'A\n1')]);
+  now.folders = [];
+  now.notes[1].folderId = null;
+  assert.strictEqual(Ai.rollbackState(now, history).notes[0].folderId, null);
+  const made = chain([s => { s.folders.push({ id: 'f2', name: '새폴더' }); }]);
+  made.now.notes[1].folderId = 'f2';
+  const kept = Ai.rollbackState(made.now, made.history);
+  assert.ok(kept.folders.some(f => f.id === 'f2'));
+});
+
 const bad = (name, p) => test('거부: ' + name, () => assert.ok(Ai.checkPlan(p, base(), 'a')));
 test('올바른 계획은 통과', () => assert.strictEqual(Ai.checkPlan(plan(), base(), 'a'), null));
 bad('줄 누락', plan({ order: [2, 3, 4, 5] }));

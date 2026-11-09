@@ -14,6 +14,7 @@
   ];
   const DEFAULT_MODEL = MODELS[0].id;
   const MAX_LINES = 2000;
+  const HISTORY_LIMIT = 10; // AI 정리를 되돌릴 수 있는 단계 수
   const WON_PER_DOLLAR = 1400; // 원화 표시용 어림 환율
   const LONG_INPUT = 100000; // Haiku는 입력이 이보다 길면 비싼 단가가 붙는다
 
@@ -230,6 +231,57 @@
     };
   }
 
+  // 되돌리기 기록: 노트 전체가 아니라 AI가 바꾼 노트의 이전 모습만 보관한다.
+  function noteMark(note) {
+    const text = note.body + '\0' + (note.folderId || '');
+    let hash = 5381;
+    for (let i = 0; i < text.length; i++) hash = (hash * 33 + text.charCodeAt(i)) | 0;
+    return `${text.length}:${hash}`;
+  }
+  function historyEntry(before, after, info) {
+    const old = new Map(before.notes.map(n => [n.id, n]));
+    const known = new Set(before.folders.map(f => f.id));
+    const changed = after.notes.filter(n => old.has(n.id) && JSON.stringify(n) !== JSON.stringify(old.get(n.id)));
+    const created = after.notes.filter(n => !old.has(n.id));
+    return {
+      ...info,
+      notes: changed.map(n => old.get(n.id)),
+      createdNotes: created.map(n => n.id),
+      createdFolders: after.folders.filter(f => !known.has(f.id)).map(f => f.id),
+      marks: Object.fromEntries([...changed, ...created].map(n => [n.id, noteMark(n)]))
+    };
+  }
+  // entries(최신이 앞)를 차례로 취소한 상태를 돌려준다. 기록에 없는 노트와 폴더는 그대로 둔다.
+  function rollbackState(state, entries) {
+    const next = JSON.parse(JSON.stringify(state));
+    for (const entry of entries) {
+      next.notes = next.notes.filter(n => !entry.createdNotes.includes(n.id));
+      for (const saved of entry.notes) {
+        const copy = JSON.parse(JSON.stringify(saved));
+        const at = next.notes.findIndex(n => n.id === copy.id);
+        if (at >= 0) next.notes[at] = copy; else next.notes.push(copy);
+      }
+      next.folders = next.folders.filter(f => !entry.createdFolders.includes(f.id) || next.notes.some(n => n.folderId === f.id));
+    }
+    // 그 사이 사용자가 지운 폴더에 있던 노트는 폴더 없음으로 돌린다.
+    const folders = new Set(next.folders.map(f => f.id));
+    for (const n of next.notes) if (n.folderId !== null && !folders.has(n.folderId)) n.folderId = null;
+    return next;
+  }
+  // 되돌리면 사라질 직접 수정이 있는지 본다. 노트마다 가장 최근 AI 정리 뒤의 모습과 지금을 비교한다.
+  function editedSince(state, entries) {
+    const seen = new Set();
+    for (const entry of entries) {
+      for (const [id, mark] of Object.entries(entry.marks)) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const note = state.notes.find(n => n.id === id);
+        if (!note || noteMark(note) !== mark) return true;
+      }
+    }
+    return false;
+  }
+
   // 요청마다 입력 길이로 단가를 고르므로 시도 하나씩 더한다.
   function costWon(model, usage) {
     const chosen = MODELS.find(m => m.id === model) || MODELS[0];
@@ -289,7 +341,7 @@
     };
   }
 
-  const api = { MODELS, DEFAULT_MODEL, MAX_LINES, SCHEMA, AiError, buildRequest, readResponse, readStream, checkPlan, applyPlan, auditPlan, costWon, costLabel };
+  const api = { MODELS, DEFAULT_MODEL, MAX_LINES, SCHEMA, AiError, buildRequest, readResponse, readStream, checkPlan, applyPlan, auditPlan, costWon, costLabel, HISTORY_LIMIT, historyEntry, rollbackState, editedSince };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AiPlan = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

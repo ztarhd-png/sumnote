@@ -192,7 +192,7 @@
     if (withFolder !== undefined) fillFolders($('name-folder'), withFolder);
     $('form-dialog').showModal(); setTimeout(() => { $('name-input').focus(); $('name-input').select(); }, 30);
   }
-  function confirmDelete(title, description, action) { deleteAction = action; $('confirm-title').textContent = title; $('confirm-description').textContent = description; $('confirm-dialog').showModal(); $('cancel-delete').focus(); }
+  function confirmDelete(title, description, action, label) { deleteAction = action; $('confirm-title').textContent = title; $('confirm-description').textContent = description; $('confirm-delete').textContent = label || '삭제'; $('confirm-dialog').showModal(); $('cancel-delete').focus(); }
   // 새 노트는 묻지 않고 바로 열린다. 첫 줄에 쓴 글이 제목이 된다.
   // inFolder를 주면(폴더 줄의 +) 그 폴더에, 아니면 지금 보던 노트의 폴더에 만든다.
   function newNote(inFolder) {
@@ -374,15 +374,29 @@
   let aiConfig = {}; try { aiConfig = JSON.parse(localStorage.getItem(AI_KEY)) || {}; } catch (_) {}
   // 기본 모델이 Haiku로 바뀌었다. 예전 기본값으로 저장된 Opus만 한 번 옮기고, 그 뒤에 고른 모델은 건드리지 않는다.
   if (aiConfig.key && !aiConfig.picked && aiConfig.model === 'claude-opus-5-5') { aiConfig = { key: aiConfig.key, model: AiPlan.DEFAULT_MODEL, picked: true }; saveAiConfig(); }
-  let aiRun = null, aiPending = null, aiLast = null;
-  const AI_PANELS = ['ai-key-form', 'ai-ask', 'ai-wait', 'ai-result'];
+  let aiRun = null, aiPending = null;
+  const AI_HISTORY_KEY = 'sumnote.ai.history', AI_HISTORY_MAX_SIZE = 2000000;
+  let aiHistory = []; try { const saved = JSON.parse(localStorage.getItem(AI_HISTORY_KEY)); if (Array.isArray(saved)) aiHistory = saved; } catch (_) {}
+  // 저장 공간이 모자라면 노트 저장이 우선이므로 오래된 기록부터 뺀다.
+  function saveAiHistory() {
+    aiHistory.length = Math.min(aiHistory.length, AiPlan.HISTORY_LIMIT);
+    for (;;) {
+      try {
+        const text = JSON.stringify(aiHistory);
+        if (text.length > AI_HISTORY_MAX_SIZE) throw Error('size');
+        localStorage.setItem(AI_HISTORY_KEY, text);
+        return;
+      } catch (_) { if (aiHistory.length <= 1) return; aiHistory.pop(); }
+    }
+  }
+  const AI_PANELS = ['ai-key-form', 'ai-ask', 'ai-wait', 'ai-result', 'ai-history'];
   function aiShow(panel) { AI_PANELS.forEach(p => { $(p).hidden = p !== panel; }); }
   function aiError(message) { $('ai-error').textContent = message || ''; $('ai-error').hidden = !message; }
-  function aiCanUndo() { return !!aiLast && JSON.stringify(state) === aiLast.after; }
   function aiAsk() {
     const n = active();
     $('ai-target').textContent = n ? `‘${nameOf(n)}’ ${n.body.split('\n').length}줄` : '';
-    $('ai-undo-last').hidden = !aiCanUndo();
+    $('ai-history-open').hidden = !aiHistory.length;
+    $('ai-history-open').textContent = `되돌리기 기록 ${aiHistory.length}`;
     aiShow('ai-ask');
   }
   function aiKeyPanel() {
@@ -477,7 +491,7 @@
       }
       if (!audit?.ok) throw new AiPlan.AiError(`금액 검수를 두 번 통과하지 못해 적용하지 않았어요. ${audit?.problem || ''}`.trim());
       if (!result.preview.changed) throw new AiPlan.AiError('바꿀 것이 없어요. 이미 요청대로 되어 있어요.');
-      aiPending = { base, state: result.state };
+      aiPending = { base, state: result.state, summary: plan.summary || request, title: nameOf(n) };
       $('ai-summary').textContent = plan.summary || '이렇게 정리할게요.';
       renderAiPreview(result.preview);
       renderAiAudit(audit, result.preview);
@@ -503,16 +517,44 @@
   $('ai-cancel').onclick = () => { aiRun?.controller.abort(); aiAsk(); };
   $('ai-again').onclick = () => { aiPending = null; aiAsk(); $('ai-request').focus(); };
   $('ai-dialog').addEventListener('close', () => { aiRun?.controller.abort(); aiPending = null; aiError(''); $('ai-request').value = ''; $('ai-request').style.height = ''; });
-  function aiUndo() {
-    if (!aiCanUndo()) { toast('그 사이 노트가 바뀌어서 되돌릴 수 없어요.'); return false; }
-    const after = state;
-    state = JSON.parse(aiLast.before);
-    if (!persist()) { state = after; return false; }
-    aiLast = null; const n = active(); if (n) openOnly(n.folderId || '');
-    saveUi(); renderTree(); renderEditor(); toast('되돌렸어요.');
-    return true;
+  function aiRollback(index) {
+    const previous = state, next = AiPlan.rollbackState(state, aiHistory.slice(0, index + 1));
+    if (!validData(next)) { toast('되돌리지 못했어요. 기록을 읽을 수 없어요.'); return; }
+    state = next;
+    if (!persist()) { state = previous; return; }
+    aiHistory.splice(0, index + 1); saveAiHistory();
+    if (!active()) currentNote = latest();
+    const n = active(); if (n) openOnly(n.folderId || '');
+    saveUi(); renderTree(); renderEditor();
+    if ($('ai-dialog').open) $('ai-dialog').close();
+    toast('되돌렸어요.');
   }
-  $('ai-undo-last').onclick = () => { if (aiUndo()) $('ai-dialog').close(); };
+  // 직접 고친 내용이 함께 사라지거나 여러 단계를 건너뛸 때는 먼저 묻는다. confirmAlways는 기록 화면에서 고를 때다.
+  function askRollback(index, confirmAlways) {
+    const entries = aiHistory.slice(0, index + 1);
+    const edited = AiPlan.editedSince(state, entries);
+    if (!edited && !confirmAlways) { aiRollback(index); return; }
+    const parts = [`‘${entries[index].title}’ 노트가 이 정리를 하기 전으로 돌아가요.`];
+    if (index) parts.push(`더 최근의 AI 정리 ${index}개도 함께 취소돼요.`);
+    if (edited) parts.push('AI 정리 뒤에 직접 고친 내용도 그 노트에서는 사라져요.');
+    confirmDelete('이때로 되돌릴까요?', parts.join(' '), () => aiRollback(index), '되돌리기');
+  }
+  const aiTime = iso => new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+  function aiHistoryPanel() {
+    $('ai-history-list').replaceChildren(...aiHistory.map((entry, index) => {
+      const row = element('li', 'ai-history-row');
+      const text = element('div', 'ai-history-text');
+      text.append(element('span', 'ai-history-summary', entry.summary), element('small', '', `${aiTime(entry.at)} ${entry.title}`));
+      const button = element('button', 'chip', '되돌리기');
+      button.type = 'button';
+      button.onclick = () => askRollback(index, true);
+      row.append(text, button);
+      return row;
+    }));
+    aiError(''); aiShow('ai-history');
+  }
+  $('ai-history-open').onclick = aiHistoryPanel;
+  $('ai-history-back').onclick = aiAsk;
   $('ai-apply').onclick = () => {
     if (!aiPending) return;
     const before = JSON.stringify(state);
@@ -520,11 +562,12 @@
     const previous = state;
     state = aiPending.state;
     if (!persist()) { state = previous; aiError('저장하지 못해 적용하지 않았어요.'); return; }
-    aiLast = { before, after: JSON.stringify(state) };
+    aiHistory.unshift(AiPlan.historyEntry(previous, state, { id: id(), at: new Date().toISOString(), summary: aiPending.summary, title: aiPending.title }));
+    saveAiHistory();
     const n = active(); if (n) openOnly(n.folderId || '');
     saveUi(); renderTree(); renderEditor();
     $('ai-dialog').close();
-    toast('정리했어요.', { label: '되돌리기', run: aiUndo });
+    toast('정리했어요.', { label: '되돌리기', run: () => askRollback(0, false) });
   };
   openNote(state.notes.some(n => n.id === ui.lastNote) ? ui.lastNote : latest());
   if (storageBroken) { $('save-status').textContent = '저장 확인 필요'; $('save-status').hidden = false; toast('기존 데이터를 읽지 못했어요. 원본 보호를 위해 자동 저장을 멈췄어요.'); } else persist();
