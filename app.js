@@ -43,7 +43,11 @@
   function titleOf(body) { return body.split('\n', 1)[0].trim(); }
   try { const saved = localStorage.getItem(KEY); if (saved) { state = JSON.parse(saved); if (!validData(state)) throw Error(); titleFirst(state.notes); } else state = starter(); }
   catch (_) { state = { version: 1, folders: [], notes: [] }; storageBroken = true; }
-  function toast(message) { $('toast').textContent = message; $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true; }, 3500); }
+  function toast(message, action) {
+    const box = $('toast'); box.textContent = message;
+    if (action) { const b = element('button', 'toast-action', action.label); b.onclick = () => { box.hidden = true; action.run(); }; box.append(b); }
+    box.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { box.hidden = true; }, action ? 9000 : 3500);
+  }
   function persist() {
     // 저장 상태는 문제가 있을 때만 위쪽 막대에 보인다.
     const warn = text => { $('save-status').textContent = text; $('save-status').hidden = false; };
@@ -154,7 +158,7 @@
   }
   function renderEditor() {
     const n = active();
-    $('editor').hidden = $('total-bar').hidden = $('edit-note').hidden = !n;
+    $('editor').hidden = $('total-bar').hidden = $('edit-note').hidden = $('ai-open').hidden = !n;
     $('empty-state').hidden = !!n;
     $('note-heading').textContent = n ? nameOf(n) : '숨노트';
     $('note-heading').disabled = !n;
@@ -363,6 +367,131 @@
       openNote(latest(), true); $('settings-dialog').close(); toast(`노트 ${notes.length}개를 가져왔어요.` + (replaceSamples ? ' 샘플 노트는 정리했어요.' : ''));
     } catch (error) { toast(error.name === 'QuotaExceededError' ? '저장 공간이 부족해 가져오지 못했어요.' : '숨노트 JSON 백업 파일인지 확인해 주세요. (최대 10MB)'); }
     finally { $('import-file').value = ''; }
+  };
+  // AI 정리: AI는 줄 번호로 된 계획만 돌려주고, 줄을 옮기는 일은 앱이 원래 글자 그대로 한다(ai.js).
+  // 키와 모델은 노트 데이터와 따로 저장해 JSON 백업에 들어가지 않게 한다.
+  const AI_KEY = 'sumnote.ai';
+  let aiConfig = {}; try { aiConfig = JSON.parse(localStorage.getItem(AI_KEY)) || {}; } catch (_) {}
+  let aiRun = null, aiPending = null, aiLast = null;
+  const AI_PANELS = ['ai-key-form', 'ai-ask', 'ai-wait', 'ai-result'];
+  function aiShow(panel) { AI_PANELS.forEach(p => { $(p).hidden = p !== panel; }); }
+  function aiError(message) { $('ai-error').textContent = message || ''; $('ai-error').hidden = !message; }
+  function aiCanUndo() { return !!aiLast && JSON.stringify(state) === aiLast.after; }
+  function aiAsk() {
+    const n = active();
+    $('ai-target').textContent = n ? `‘${nameOf(n)}’ ${n.body.split('\n').length}줄` : '';
+    $('ai-undo-last').hidden = !aiCanUndo();
+    aiShow('ai-ask');
+  }
+  function aiKeyPanel() {
+    $('ai-key').value = ''; $('ai-key').placeholder = aiConfig.key ? '저장된 키를 그대로 씁니다' : 'sk-ant-';
+    $('ai-model').value = aiConfig.model || AiPlan.DEFAULT_MODEL;
+    $('ai-forget').hidden = !aiConfig.key;
+    aiShow('ai-key-form');
+  }
+  function saveAiConfig() { try { localStorage.setItem(AI_KEY, JSON.stringify(aiConfig)); return true; } catch (_) { return false; } }
+  $('ai-model').replaceChildren(...AiPlan.MODELS.map(m => { const o = element('option', '', m.label); o.value = m.id; return o; }));
+  $('ai-open').onclick = () => {
+    if (!active()) return;
+    if (editing) finishEditing();
+    flushSave(); aiError('');
+    if (aiConfig.key) aiAsk(); else aiKeyPanel();
+    $('ai-dialog').showModal();
+  };
+  $('ai-settings').onclick = () => { aiError(''); aiKeyPanel(); };
+  $('ai-key-form').onsubmit = event => {
+    event.preventDefault();
+    const key = $('ai-key').value.trim() || aiConfig.key;
+    if (!key) { aiError('API 키를 넣어 주세요.'); return; }
+    aiConfig = { key, model: $('ai-model').value };
+    if (!saveAiConfig()) { aiError('키를 저장하지 못했어요. 브라우저 저장소를 확인해 주세요.'); return; }
+    aiError(''); aiAsk();
+  };
+  $('ai-forget').onclick = () => {
+    aiConfig = {}; try { localStorage.removeItem(AI_KEY); } catch (_) {}
+    aiError(''); aiKeyPanel();
+  };
+  function renderAiPreview(p) {
+    const box = $('ai-preview'); box.replaceChildren();
+    const line = (cls, text) => box.append(element('div', 'ai-line ' + cls, text));
+    line('ai-title', p.title || '새 노트');
+    p.rows.forEach(r => line(r.heading ? 'ai-heading' : '', r.text));
+    for (const m of p.moved) {
+      line('ai-section', `‘${m.title}’${m.isNew ? ' 새 노트' : ''}로 옮김 ${m.lines.length}줄`);
+      m.lines.forEach(t => line('', t));
+    }
+    if (p.removed.length) {
+      line('ai-section ai-danger', `지워지는 줄 ${p.removed.length}개`);
+      p.removed.forEach(t => line('ai-removed', t));
+    }
+    if (p.noteMoves.length) {
+      line('ai-section', '폴더 이동');
+      p.noteMoves.forEach(m => line('', `${m.title} → ${m.folder}`));
+    }
+    box.scrollTop = 0;
+    $('ai-total').textContent = p.before === p.after ? `합계 ${fmt(p.after)}원 그대로` : `합계 ${fmt(p.before)}원 → ${fmt(p.after)}원`;
+  }
+  async function runAi(request) {
+    const n = active(); if (!n || aiRun) return;
+    if (n.body.split('\n').length > AiPlan.MAX_LINES) { aiError(`한 번에 ${fmt(AiPlan.MAX_LINES)}줄까지 정리할 수 있어요.`); return; }
+    aiError(''); aiShow('ai-wait');
+    const run = aiRun = { controller: new AbortController(), timedOut: false };
+    const timer = setTimeout(() => { run.timedOut = true; run.controller.abort(); }, 120000);
+    try {
+      const base = JSON.stringify(state);
+      const { url, init } = AiPlan.buildRequest({ apiKey: aiConfig.key, model: aiConfig.model, state, noteId: n.id, request });
+      const response = await fetch(url, { ...init, signal: run.controller.signal });
+      const plan = AiPlan.readResponse(response.status, await response.json().catch(() => null));
+      if (plan?.cannot) throw new AiPlan.AiError(plan.cannot);
+      const problem = AiPlan.checkPlan(plan, state, n.id);
+      if (problem) throw new AiPlan.AiError(problem);
+      const result = AiPlan.applyPlan(state, n.id, plan, id, new Date().toISOString());
+      if (!result.preview.changed) throw new AiPlan.AiError('바꿀 것이 없어요. 이미 요청대로 되어 있어요.');
+      aiPending = { base, state: result.state };
+      $('ai-summary').textContent = plan.summary || '이렇게 정리할게요.';
+      renderAiPreview(result.preview);
+      aiShow('ai-result');
+    } catch (error) {
+      if (run.controller.signal.aborted && !run.timedOut) return;
+      aiAsk();
+      aiError(run.timedOut ? '시간이 너무 오래 걸려 멈췄어요. 다시 해 주세요.' : error instanceof AiPlan.AiError ? error.message : '인터넷에 연결되어 있는지 확인해 주세요.');
+    } finally { clearTimeout(timer); if (aiRun === run) aiRun = null; }
+  }
+  $('ai-ask').onsubmit = event => {
+    event.preventDefault();
+    const request = $('ai-request').value.trim();
+    if (!request) { aiError('어떻게 정리할지 적어 주세요.'); return; }
+    runAi(request);
+  };
+  $('ai-request').addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('ai-ask').requestSubmit(); }
+  });
+  document.querySelectorAll('[data-ask]').forEach(b => { b.onclick = () => { $('ai-request').value = b.dataset.ask; runAi(b.dataset.ask); }; });
+  $('ai-cancel').onclick = () => { aiRun?.controller.abort(); aiAsk(); };
+  $('ai-again').onclick = () => { aiPending = null; aiAsk(); $('ai-request').focus(); };
+  $('ai-dialog').addEventListener('close', () => { aiRun?.controller.abort(); aiPending = null; aiError(''); $('ai-request').value = ''; });
+  function aiUndo() {
+    if (!aiCanUndo()) { toast('그 사이 노트가 바뀌어서 되돌릴 수 없어요.'); return false; }
+    const after = state;
+    state = JSON.parse(aiLast.before);
+    if (!persist()) { state = after; return false; }
+    aiLast = null; const n = active(); if (n) openOnly(n.folderId || '');
+    saveUi(); renderTree(); renderEditor(); toast('되돌렸어요.');
+    return true;
+  }
+  $('ai-undo-last').onclick = () => { if (aiUndo()) $('ai-dialog').close(); };
+  $('ai-apply').onclick = () => {
+    if (!aiPending) return;
+    const before = JSON.stringify(state);
+    if (before !== aiPending.base || !validData(aiPending.state)) { aiError('노트가 바뀌어서 적용하지 않았어요. 다시 해 주세요.'); aiPending = null; aiAsk(); return; }
+    const previous = state;
+    state = aiPending.state;
+    if (!persist()) { state = previous; aiError('저장하지 못해 적용하지 않았어요.'); return; }
+    aiLast = { before, after: JSON.stringify(state) };
+    const n = active(); if (n) openOnly(n.folderId || '');
+    saveUi(); renderTree(); renderEditor();
+    $('ai-dialog').close();
+    toast('정리했어요.', { label: '되돌리기', run: aiUndo });
   };
   openNote(state.notes.some(n => n.id === ui.lastNote) ? ui.lastNote : latest());
   if (storageBroken) { $('save-status').textContent = '저장 확인 필요'; $('save-status').hidden = false; toast('기존 데이터를 읽지 못했어요. 원본 보호를 위해 자동 저장을 멈췄어요.'); } else persist();

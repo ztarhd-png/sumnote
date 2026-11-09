@@ -269,7 +269,7 @@ main { flex: 1; min-width: 0; margin-left: 280px; }
 #save-note { display: none; background: var(--accent); color: #fff; }
 #save-note:hover { background: var(--accent); filter: brightness(1.05); }
 .editing #save-note { display: inline-block; }
-.editing #edit-note { display: none; }
+.editing #edit-note, .editing #ai-open { display: none; }
 .editing #note-ink { display: none; }
 .editing #line-numbers { visibility: hidden; }
 
@@ -382,6 +382,34 @@ dialog p b { color: var(--ink); }
   background: var(--solid); color: var(--solid-ink); font-size: 14px; font-weight: 600;
   box-shadow: var(--shadow-float);
 }
+
+/* ── AI 정리 ─────────────────────────────────────── */
+/* 아이폰 키보드에 가리지 않게 화면 위쪽에 붙인다. */
+#ai-dialog { margin: calc(12px + env(safe-area-inset-top)) auto auto; }
+#ai-request {
+  display: block; width: 100%; padding: 13px 16px; border: 0; border-radius: 18px; outline: none; resize: none;
+  background: var(--fill); color: var(--ink); font: inherit; font-size: 17px; line-height: 1.45;
+}
+#ai-request:focus { background: var(--fill-2); box-shadow: 0 0 0 2px var(--accent); }
+#ai-target { margin: 8px 0 10px; }
+.ai-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ai-link { padding: 8px 2px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.ai-error { margin: 10px 0 0; padding: 11px 14px; border-radius: 14px; background: var(--hold-fill); color: var(--hold) !important; font-size: 14px !important; font-weight: 600; }
+.ai-wait { display: grid; justify-items: center; gap: 12px; padding: 26px 0 8px; }
+.ai-wait p { margin: 0; }
+.ai-spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--fill-2); border-top-color: var(--accent); animation: ai-spin 800ms linear infinite; }
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ai-spinner { animation-duration: 2400ms; } }
+.ai-summary { margin: 10px 0 0; color: var(--ink) !important; font-weight: 600; }
+#ai-total { margin: 2px 0 10px; }
+.ai-preview { max-height: 46dvh; overflow: auto; padding: 10px 14px; border-radius: 16px; background: var(--fill); font-size: 15px; line-height: 1.55; }
+.ai-line { min-height: 1.55em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ai-title { font-weight: 700; }
+.ai-heading { color: var(--ink-3); font-weight: 700; }
+.ai-section { margin-top: 12px; color: var(--ink-3); font-size: 13px; font-weight: 700; }
+.ai-danger { color: var(--hold); }
+.ai-removed { color: var(--ink-3); text-decoration: line-through; }
+.toast-action { margin-left: 14px; color: inherit; font: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
 
 /* ── 화면 크기 ─────────────────────────────────────── */
 @media (max-width: 1100px) {
