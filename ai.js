@@ -7,9 +7,9 @@
   const Parser = typeof module !== 'undefined' && module.exports ? require('./parser.js') : root.SumParser;
   const API_URL = 'https://api.anthropic.com/v1/messages';
   const MODELS = [
-    { id: 'claude-opus-5-5', label: 'Opus 5.5 (가장 정확)', fallback: true },
-    { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5 (절반 가격)', fallback: true },
-    { id: 'claude-haiku-5-5', label: 'Haiku 5.5 (가장 저렴)', fallback: false }
+    { id: 'claude-haiku-5-5', label: 'Haiku 5.5 (가장 저렴)', fallback: false },
+    { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5 (중간)', fallback: true },
+    { id: 'claude-opus-5-5', label: 'Opus 5.5 (가장 정확, 가장 비쌈)', fallback: true }
   ];
   const DEFAULT_MODEL = MODELS[0].id;
   const MAX_LINES = 2000;

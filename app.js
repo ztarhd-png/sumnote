@@ -372,6 +372,8 @@
   // 키와 모델은 노트 데이터와 따로 저장해 JSON 백업에 들어가지 않게 한다.
   const AI_KEY = 'sumnote.ai';
   let aiConfig = {}; try { aiConfig = JSON.parse(localStorage.getItem(AI_KEY)) || {}; } catch (_) {}
+  // 기본 모델이 Haiku로 바뀌었다. 예전 기본값으로 저장된 Opus만 한 번 옮기고, 그 뒤에 고른 모델은 건드리지 않는다.
+  if (aiConfig.key && !aiConfig.picked && aiConfig.model === 'claude-opus-5-5') { aiConfig = { key: aiConfig.key, model: AiPlan.DEFAULT_MODEL, picked: true }; saveAiConfig(); }
   let aiRun = null, aiPending = null, aiLast = null;
   const AI_PANELS = ['ai-key-form', 'ai-ask', 'ai-wait', 'ai-result'];
   function aiShow(panel) { AI_PANELS.forEach(p => { $(p).hidden = p !== panel; }); }
@@ -403,7 +405,7 @@
     event.preventDefault();
     const key = $('ai-key').value.trim() || aiConfig.key;
     if (!key) { aiError('API 키를 넣어 주세요.'); return; }
-    aiConfig = { key, model: $('ai-model').value };
+    aiConfig = { key, model: $('ai-model').value, picked: true };
     if (!saveAiConfig()) { aiError('키를 저장하지 못했어요. 브라우저 저장소를 확인해 주세요.'); return; }
     aiError(''); aiAsk();
   };

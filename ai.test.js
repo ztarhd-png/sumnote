@@ -82,7 +82,8 @@ bad('없는 폴더', plan({ note_moves: [{ note: 1, folder: 5, new_folder: '' }]
 bad('없는 노트 폴더 이동', plan({ note_moves: [{ note: 0, folder: 1, new_folder: '' }] }));
 
 test('요청: 브라우저 헤더, 본문에 값과 다른 노트 제목만', () => {
-  const { url, init } = Ai.buildRequest({ apiKey: 'k', model: Ai.DEFAULT_MODEL, state: base(), noteId: 'a', request: '정렬' });
+  assert.strictEqual(Ai.DEFAULT_MODEL, 'claude-haiku-5-5');
+  const { url, init } = Ai.buildRequest({ apiKey: 'k', model: 'claude-opus-5-5', state: base(), noteId: 'a', request: '정렬' });
   assert.strictEqual(url, 'https://api.anthropic.com/v1/messages');
   assert.strictEqual(init.headers['anthropic-dangerous-direct-browser-access'], 'true');
   assert.strictEqual(init.headers['x-api-key'], 'k');
