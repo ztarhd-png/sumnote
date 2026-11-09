@@ -499,9 +499,6 @@
   // 긴 요청도 끝까지 보이게 입력칸을 글에 맞춰 늘린다.
   function fitAiRequest() { const t = $('ai-request'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px'; }
   $('ai-request').addEventListener('input', fitAiRequest);
-  $('ai-request').addEventListener('keydown', event => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('ai-ask').requestSubmit(); }
-  });
   document.querySelectorAll('[data-ask]').forEach(b => { b.onclick = () => { $('ai-request').value = b.dataset.ask; runAi(b.dataset.ask); }; });
   $('ai-cancel').onclick = () => { aiRun?.controller.abort(); aiAsk(); };
   $('ai-again').onclick = () => { aiPending = null; aiAsk(); $('ai-request').focus(); };
