@@ -451,6 +451,7 @@
     let timer;
     const kick = () => { clearTimeout(timer); timer = setTimeout(() => { run.timedOut = true; run.controller.abort(); }, 120000); };
     const status = text => { $('ai-wait-text').textContent = text; };
+    let spent = 0; // 재시도까지 합친 이번 정리의 비용(원)
     try {
       const base = JSON.stringify(state);
       let plan, result, audit, problem = '';
@@ -464,6 +465,7 @@
         const data = response.status === 200
           ? await AiPlan.readStream(response, length => { kick(); if (length) status(`${lead} (${fmt(length)}자)`); })
           : await response.json().catch(() => null);
+        if (data?.usage) spent += AiPlan.costWon(aiConfig.model, data.usage);
         plan = AiPlan.readResponse(response.status, data);
         if (plan?.cannot) throw new AiPlan.AiError(plan.cannot);
         const broken = AiPlan.checkPlan(plan, state, n.id);
@@ -479,11 +481,13 @@
       $('ai-summary').textContent = plan.summary || '이렇게 정리할게요.';
       renderAiPreview(result.preview);
       renderAiAudit(audit, result.preview);
+      $('ai-cost').textContent = `이번 비용 ${AiPlan.costLabel(spent)}`;
       aiShow('ai-result');
     } catch (error) {
       if (run.controller.signal.aborted && !run.timedOut) return;
       aiAsk();
-      aiError(run.timedOut ? '시간이 너무 오래 걸려 멈췄어요. 다시 해 주세요.' : error instanceof AiPlan.AiError ? error.message : '인터넷에 연결되어 있는지 확인해 주세요.');
+      const reason = run.timedOut ? '시간이 너무 오래 걸려 멈췄어요. 다시 해 주세요.' : error instanceof AiPlan.AiError ? error.message : '인터넷에 연결되어 있는지 확인해 주세요.';
+      aiError(spent ? `${reason} (이번 비용 ${AiPlan.costLabel(spent)})` : reason);
     } finally { clearTimeout(timer); if (aiRun === run) aiRun = null; }
   }
   $('ai-ask').onsubmit = event => {

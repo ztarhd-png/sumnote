@@ -215,6 +215,21 @@ atest('스트림: 한글이 조각 경계에서 잘려도 온전하다', async (
   const r = new Response(new ReadableStream({ start(c) { c.enqueue(bytes.slice(0, cut)); c.enqueue(bytes.slice(cut)); c.close(); } }));
   assert.deepStrictEqual(Ai.readResponse(200, await Ai.readStream(r)), { order: [2, '한글'] });
 });
+atest('스트림: 입력과 출력 토큰을 모은다', async () => {
+  const withUsage = stream.map(e => e.type === 'message_start' ? { ...e, message: { usage: { input_tokens: 1000, output_tokens: 1 } } } : e.type === 'message_delta' ? { ...e, usage: { output_tokens: 2000 } } : e);
+  assert.deepStrictEqual((await Ai.readStream(sse([events(withUsage)]))).usage, { input: 1000, output: 2000 });
+});
+test('비용: 모델 단가로 원화 계산', () => {
+  const usage = { input: 1000000, output: 1000000 };
+  assert.strictEqual(Math.round(Ai.costWon('claude-haiku-5-5', usage)), Math.round((0.5 + 2.5) * 1400));
+  assert.strictEqual(Math.round(Ai.costWon('claude-haiku-5-5', { input: 100000, output: 0 })), 14);
+  assert.strictEqual(Math.round(Ai.costWon('claude-sonnet-5-5', { input: 1000000, output: 0 })), 2800);
+  assert.strictEqual(Math.round(Ai.costWon('claude-opus-5-5', { input: 0, output: 1000000 })), 28000);
+});
+test('비용 문구', () => {
+  assert.strictEqual(Ai.costLabel(0.4), '1원 미만');
+  assert.strictEqual(Ai.costLabel(1234.4), '약 1,234원');
+});
 atest('스트림: 도중의 혼잡 오류', async () => {
   await assert.rejects(Ai.readStream(sse([events([{ type: 'error', error: { type: 'overloaded_error', message: 'x' } }])])), e => e instanceof Ai.AiError && e.message.includes('혼잡'));
 });

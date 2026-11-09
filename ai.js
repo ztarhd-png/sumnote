@@ -7,12 +7,15 @@
   const Parser = typeof module !== 'undefined' && module.exports ? require('./parser.js') : root.SumParser;
   const API_URL = 'https://api.anthropic.com/v1/messages';
   const MODELS = [
-    { id: 'claude-haiku-5-5', label: 'Haiku 5.5 (가장 저렴)', fallback: false },
-    { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5 (중간)', fallback: true },
-    { id: 'claude-opus-5-5', label: 'Opus 5.5 (가장 정확, 가장 비쌈)', fallback: true }
+    // price: 100만 토큰당 달러 [입력, 출력]
+    { id: 'claude-haiku-5-5', label: 'Haiku 5.5 (가장 저렴)', fallback: false, price: [0.1, 0.5], longPrice: [0.5, 2.5] },
+    { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5 (중간)', fallback: true, price: [2, 10] },
+    { id: 'claude-opus-5-5', label: 'Opus 5.5 (가장 정확, 가장 비쌈)', fallback: true, price: [4, 20] }
   ];
   const DEFAULT_MODEL = MODELS[0].id;
   const MAX_LINES = 2000;
+  const WON_PER_DOLLAR = 1400; // 원화 표시용 어림 환율
+  const LONG_INPUT = 100000; // Haiku는 입력이 이보다 길면 비싼 단가가 붙는다
 
   const int = { type: 'integer' };
   const ints = { type: 'array', items: int };
@@ -109,6 +112,7 @@
     const reader = response.body.getReader(), decoder = new TextDecoder();
     const content = [];
     let stop_reason = null, buffer = '', length = 0;
+    const usage = { input: 0, output: 0 };
     const handle = line => {
       if (!line.startsWith('data:')) return;
       let event; try { event = JSON.parse(line.slice(5)); } catch (_) { return; }
@@ -116,6 +120,8 @@
         const overloaded = /overloaded|rate_limit/.test(event.error?.type || '');
         throw new AiError(overloaded ? 'Claude 서버가 혼잡해요. 잠시 뒤에 다시 해 주세요.' : `요청을 처리하지 못했어요. ${event.error?.message || ''}`.trim());
       }
+      if (event.type === 'message_start') { usage.input = event.message?.usage?.input_tokens || 0; usage.output = event.message?.usage?.output_tokens || 0; }
+      if (event.type === 'message_delta' && event.usage?.output_tokens) usage.output = event.usage.output_tokens;
       if (event.type === 'content_block_start') content.push({ type: event.content_block?.type, text: '' });
       else if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta' && content.length) { content[content.length - 1].text += event.delta.text; length += event.delta.text.length; }
       else if (event.type === 'message_delta' && event.delta?.stop_reason) stop_reason = event.delta.stop_reason;
@@ -130,7 +136,7 @@
       onProgress?.(length);
     }
     if (buffer) handle(buffer);
-    return { stop_reason, content };
+    return { stop_reason, content, usage };
   }
 
   // 계획이 노트의 모든 줄을 정확히 한 번씩 다루는지 검사한다. 문제가 있으면 그 문장을, 없으면 null을 돌려준다.
@@ -224,6 +230,17 @@
     };
   }
 
+  // 요청마다 입력 길이로 단가를 고르므로 시도 하나씩 더한다.
+  function costWon(model, usage) {
+    const chosen = MODELS.find(m => m.id === model) || MODELS[0];
+    const [input, output] = chosen.longPrice && usage.input > LONG_INPUT ? chosen.longPrice : chosen.price;
+    return (usage.input * input + usage.output * output) / 1e6 * WON_PER_DOLLAR;
+  }
+  function costLabel(won) {
+    if (won < 1) return '1원 미만';
+    return `약 ${new Intl.NumberFormat('ko-KR').format(Math.round(won))}원`;
+  }
+
   // 줄 안의 금액을 숫자로 꺼낸다. 합계 계산과 같은 파서를 쓴다.
   const amountsIn = line => line.spans.map(([a, b]) => Number(line.raw.slice(a, b).replace(/,/g, '').replace(/−/g, '-')));
   const sorted = list => [...list].sort((a, b) => a - b);
@@ -272,7 +289,7 @@
     };
   }
 
-  const api = { MODELS, DEFAULT_MODEL, MAX_LINES, SCHEMA, AiError, buildRequest, readResponse, readStream, checkPlan, applyPlan, auditPlan };
+  const api = { MODELS, DEFAULT_MODEL, MAX_LINES, SCHEMA, AiError, buildRequest, readResponse, readStream, checkPlan, applyPlan, auditPlan, costWon, costLabel };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AiPlan = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -402,7 +402,7 @@ dialog p b { color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { .ai-spinner { animation-duration: 2400ms; } }
 .ai-summary { margin: 10px 0 0; color: var(--ink) !important; font-weight: 600; }
 #ai-total { margin: 2px 0 10px; }
-#ai-chars { margin: -8px 0 10px; overflow-wrap: anywhere; }
+#ai-chars, #ai-cost { margin: -8px 0 10px; overflow-wrap: anywhere; }
 .ai-preview { max-height: 46dvh; overflow: auto; padding: 10px 14px; border-radius: 16px; background: var(--fill); font-size: 15px; line-height: 1.55; }
 .ai-line { min-height: 1.55em; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ai-title { font-weight: 700; }
