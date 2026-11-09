@@ -388,7 +388,7 @@ dialog p b { color: var(--ink); }
 #ai-dialog { margin: calc(12px + env(safe-area-inset-top)) auto auto; }
 #ai-request {
   display: block; width: 100%; padding: 13px 16px; border: 0; border-radius: 18px; outline: none; resize: none;
-  background: var(--fill); color: var(--ink); font: inherit; font-size: 17px; line-height: 1.45;
+  background: var(--fill); color: var(--ink); font: inherit; font-size: 17px; line-height: 1.45; overflow: auto;
 }
 #ai-request:focus { background: var(--fill-2); box-shadow: 0 0 0 2px var(--accent); }
 #ai-target { margin: 8px 0 10px; }
@@ -402,6 +402,7 @@ dialog p b { color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { .ai-spinner { animation-duration: 2400ms; } }
 .ai-summary { margin: 10px 0 0; color: var(--ink) !important; font-weight: 600; }
 #ai-total { margin: 2px 0 10px; }
+#ai-chars { margin: -8px 0 10px; overflow-wrap: anywhere; }
 .ai-preview { max-height: 46dvh; overflow: auto; padding: 10px 14px; border-radius: 16px; background: var(--fill); font-size: 15px; line-height: 1.55; }
 .ai-line { min-height: 1.55em; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ai-title { font-weight: 700; }

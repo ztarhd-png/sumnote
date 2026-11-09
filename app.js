@@ -429,27 +429,54 @@
       p.noteMoves.forEach(m => line('', `${m.title} → ${m.folder}`));
     }
     box.scrollTop = 0;
-    $('ai-total').textContent = p.before === p.after ? `합계 ${fmt(p.after)}원 그대로` : `합계 ${fmt(p.before)}원 → ${fmt(p.after)}원`;
+  }
+  function renderAiAudit(audit, p) {
+    const totals = p.before === p.after ? `합계 ${fmt(p.after)}원 그대로` : `합계 ${fmt(p.before)}원 → ${fmt(p.after)}원`;
+    $('ai-total').textContent = `검수 통과: 금액 ${fmt(audit.amounts)}개 일치, ${totals}`;
+    const words = list => list.slice(0, 12).map(([ch, n]) => `${ch} ${fmt(n)}`).join(', ') + (list.length > 12 ? ' 등' : '');
+    const parts = [];
+    if (audit.lost.length) parts.push('사라진 글자: ' + words(audit.lost));
+    if (audit.gained.length) parts.push('새 글자: ' + words(audit.gained));
+    $('ai-chars').textContent = parts.join(' / ') || (audit.rewritten ? '글자 변화 없음' : '');
+    $('ai-chars').hidden = !$('ai-chars').textContent;
   }
   async function runAi(request) {
     const n = active(); if (!n || aiRun) return;
     if (n.body.split('\n').length > AiPlan.MAX_LINES) { aiError(`한 번에 ${fmt(AiPlan.MAX_LINES)}줄까지 정리할 수 있어요.`); return; }
     aiError(''); aiShow('ai-wait');
     const run = aiRun = { controller: new AbortController(), timedOut: false };
-    const timer = setTimeout(() => { run.timedOut = true; run.controller.abort(); }, 120000);
+    // 데이터가 오가는 동안에는 기다리고, 2분 동안 아무것도 오지 않으면 멈춘다.
+    let timer;
+    const kick = () => { clearTimeout(timer); timer = setTimeout(() => { run.timedOut = true; run.controller.abort(); }, 120000); };
+    const status = text => { $('ai-wait-text').textContent = text; };
     try {
       const base = JSON.stringify(state);
-      const { url, init } = AiPlan.buildRequest({ apiKey: aiConfig.key, model: aiConfig.model, state, noteId: n.id, request });
-      const response = await fetch(url, { ...init, signal: run.controller.signal });
-      const plan = AiPlan.readResponse(response.status, await response.json().catch(() => null));
-      if (plan?.cannot) throw new AiPlan.AiError(plan.cannot);
-      const problem = AiPlan.checkPlan(plan, state, n.id);
-      if (problem) throw new AiPlan.AiError(problem);
-      const result = AiPlan.applyPlan(state, n.id, plan, id, new Date().toISOString());
+      let plan, result, audit, problem = '';
+      // 검수를 통과하지 못하면 무엇이 틀렸는지 알려 주고 한 번 더 시킨다.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        kick();
+        const lead = attempt ? '금액이 맞지 않아 다시 정리하는 중이에요' : '정리하는 중이에요';
+        status(lead);
+        const { url, init } = AiPlan.buildRequest({ apiKey: aiConfig.key, model: aiConfig.model, state, noteId: n.id, request, problem });
+        const response = await fetch(url, { ...init, signal: run.controller.signal });
+        const data = response.status === 200
+          ? await AiPlan.readStream(response, length => { kick(); if (length) status(`${lead} (${fmt(length)}자)`); })
+          : await response.json().catch(() => null);
+        plan = AiPlan.readResponse(response.status, data);
+        if (plan?.cannot) throw new AiPlan.AiError(plan.cannot);
+        const broken = AiPlan.checkPlan(plan, state, n.id);
+        if (broken) { problem = '모든 줄 번호를 order, remove, line_moves 중 한 곳에 정확히 한 번씩 넣어야 한다.'; audit = null; if (attempt) throw new AiPlan.AiError(broken); continue; }
+        result = AiPlan.applyPlan(state, n.id, plan, id, new Date().toISOString());
+        audit = AiPlan.auditPlan(state, result.state, n.id, plan);
+        if (audit.ok) break;
+        problem = audit.problem;
+      }
+      if (!audit?.ok) throw new AiPlan.AiError(`금액 검수를 두 번 통과하지 못해 적용하지 않았어요. ${audit?.problem || ''}`.trim());
       if (!result.preview.changed) throw new AiPlan.AiError('바꿀 것이 없어요. 이미 요청대로 되어 있어요.');
       aiPending = { base, state: result.state };
       $('ai-summary').textContent = plan.summary || '이렇게 정리할게요.';
       renderAiPreview(result.preview);
+      renderAiAudit(audit, result.preview);
       aiShow('ai-result');
     } catch (error) {
       if (run.controller.signal.aborted && !run.timedOut) return;
@@ -463,13 +490,16 @@
     if (!request) { aiError('어떻게 정리할지 적어 주세요.'); return; }
     runAi(request);
   };
+  // 긴 요청도 끝까지 보이게 입력칸을 글에 맞춰 늘린다.
+  function fitAiRequest() { const t = $('ai-request'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px'; }
+  $('ai-request').addEventListener('input', fitAiRequest);
   $('ai-request').addEventListener('keydown', event => {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('ai-ask').requestSubmit(); }
   });
   document.querySelectorAll('[data-ask]').forEach(b => { b.onclick = () => { $('ai-request').value = b.dataset.ask; runAi(b.dataset.ask); }; });
   $('ai-cancel').onclick = () => { aiRun?.controller.abort(); aiAsk(); };
   $('ai-again').onclick = () => { aiPending = null; aiAsk(); $('ai-request').focus(); };
-  $('ai-dialog').addEventListener('close', () => { aiRun?.controller.abort(); aiPending = null; aiError(''); $('ai-request').value = ''; });
+  $('ai-dialog').addEventListener('close', () => { aiRun?.controller.abort(); aiPending = null; aiError(''); $('ai-request').value = ''; $('ai-request').style.height = ''; });
   function aiUndo() {
     if (!aiCanUndo()) { toast('그 사이 노트가 바뀌어서 되돌릴 수 없어요.'); return false; }
     const after = state;

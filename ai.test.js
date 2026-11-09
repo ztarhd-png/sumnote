@@ -10,7 +10,7 @@ const base = () => ({
     { id: 'b', title: '여행', body: '여행\n항공권 100\n\n', folderId: null, updatedAt: '2026-01-01T00:00:00.000Z' }
   ]
 });
-const plan = extra => ({ summary: '', cannot: '', order: [3, 2, 4, 5, 6], headings: [], remove: [], line_moves: [], note_moves: [], ...extra });
+const plan = extra => ({ summary: '', cannot: '', order: [3, 2, 4, 5, 6], rewritten_lines: [], headings: [], remove: [], line_moves: [], note_moves: [], ...extra });
 const NOW = '2026-02-02T00:00:00.000Z';
 let ids = 0;
 const run = (p, s = base()) => Ai.applyPlan(s, 'a', p, () => 'new' + ++ids, NOW);
@@ -122,4 +122,105 @@ fails('거절', 200, { stop_reason: 'refusal', content: [] }, '처리하지 않�
 fails('잘림', 200, { stop_reason: 'max_tokens', content: [{ type: 'text', text: '{' }] }, '너무 길어');
 fails('JSON 아님', 200, { stop_reason: 'end_turn', content: [{ type: 'text', text: 'hello' }] }, '읽지 못했어요');
 
-if (!process.exitCode) console.log(`${passed} tests passed`);
+// 형식 바꾸기와 이중 검수
+const dated = () => ({ version: 1, folders: [], notes: [
+  { id: 'a', title: '기록', body: ['기록', '사과 6,000 2013.5.3', '우유 3,200 2014.1.2', '', '할인 -2,000 2012.3.4'].join('\n'), folderId: null, updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'b', title: '다른', body: '다른\n항공권 100', folderId: null, updatedAt: '2026-01-01T00:00:00.000Z' }
+] });
+const re = (lines, extra) => ({ summary: '', cannot: '', order: [2, 3, 4, 5], rewritten_lines: lines, headings: [], remove: [], line_moves: [], note_moves: [], ...extra });
+const auditOf = p => { const s = dated(); const r = Ai.applyPlan(s, 'a', p, () => 'n', NOW); return { r, a: Ai.auditPlan(s, r.state, 'a', p) }; };
+const good = ['# 2014년', '2014.1.2 우유 3200', '', '# 2013년', '2013.5.3 사과 6,000', '', '# 2012년', '2012.3.4 할인 -2,000'];
+
+test('형식을 바꿔 다시 쓰면 제목은 그대로, 금액이 맞으면 통과', () => {
+  const { r, a } = auditOf(re(good));
+  assert.strictEqual(a.ok, true, a.problem);
+  assert.strictEqual(r.state.notes[0].body, ['기록', ...good].join('\n'));
+  assert.strictEqual(r.preview.before, r.preview.after);
+  assert.strictEqual(a.amounts, 3);
+  assert.deepStrictEqual(r.preview.rows[0], { text: '# 2014년', heading: true });
+});
+test('다시 쓴 줄 안의 줄바꿈은 줄로 나뉜다', () => {
+  assert.strictEqual(auditOf(re(['a 3,200\nb 6,000', 'c -2,000'])).r.state.notes[0].body, '기록\na 3,200\nb 6,000\nc -2,000');
+});
+test('글자 변화를 알려 준다', () => {
+  const { a } = auditOf(re(good));
+  assert.ok(a.gained.some(([c]) => c === '년'));
+  assert.deepStrictEqual(a.lost, []);
+});
+test('순서만 바꾸면 글자 변화를 따지지 않는다', () => {
+  const p = re([], { order: [3, 2, 4, 5] });
+  const { a } = auditOf(p);
+  assert.strictEqual(a.ok, true); assert.strictEqual(a.rewritten, false); assert.deepStrictEqual(a.gained, []);
+});
+const caught = (name, lines, word, extra) => test('검수 실패: ' + name, () => { const { a } = auditOf(re(lines, extra)); assert.strictEqual(a.ok, false); assert.ok(a.problem.includes(word), a.problem); });
+caught('금액을 바꿈', ['2014.1.2 우유 3201', '2013.5.3 사과 6,000', '2012.3.4 할인 -2,000'], '없어진 금액 1개: 3200');
+caught('금액을 뺌', ['2014.1.2 우유', '2013.5.3 사과 6,000', '2012.3.4 할인 -2,000'], '없어진 금액');
+caught('부호를 바꿈', ['2014.1.2 우유 3200', '2013.5.3 사과 6,000', '2012.3.4 할인 2,000'], '새로 생긴 금액 1개: 2000');
+caught('금액을 합침', ['우유와 사과 9200', '2012.3.4 할인 -2,000'], '없어진 금액 2개: 3200, 6000');
+caught('금액 줄을 #으로 숨김', ['# 2014.1.2 우유 3200', '2013.5.3 사과 6,000', '2012.3.4 할인 -2,000'], '없어진 금액');
+caught('금액에 글자를 붙여 계산에서 빠짐', ['2014.1.2 우유 3200원', '2013.5.3 사과 6,000', '2012.3.4 할인 -2,000'], '없어진 금액');
+caught('날짜가 금액으로 잡힘', ['2014 우유 3200', '2013.5.3 사과 6,000', '2012.3.4 할인 -2,000'], '새로 생긴 금액 1개: 2014');
+test('두 금액을 맞바꾸면 합계는 같아도 위치는 금액 검사로 못 잡지만 글자는 같다(미리보기로 확인)', () => {
+  assert.strictEqual(auditOf(re(['2014.1.2 우유 6000', '2013.5.3 사과 3200', '2012.3.4 할인 -2,000'])).a.ok, true);
+});
+test('지운 줄의 금액은 빠져도 통과하고 합계는 준다', () => {
+  const { r, a } = auditOf(re(['2014.1.2 우유 3200', '2013.5.3 사과 6,000'], { order: [2, 3, 4], remove: [5] }));
+  assert.strictEqual(a.ok, true, a.problem);
+  assert.strictEqual(r.preview.after, 9200);
+});
+test('다른 노트로 옮긴 금액은 전체 합계에서 그대로 유지', () => {
+  const { r, a } = auditOf(re(['2014.1.2 우유 3200', '2013.5.3 사과 6,000'], { order: [2, 3, 4], line_moves: [{ note: 2, new_title: '', lines: [5] }] }));
+  assert.strictEqual(a.ok, true, a.problem);
+  assert.ok(r.state.notes[1].body.endsWith('할인 -2,000 2012.3.4'));
+});
+test('rewritten_lines가 없으면 계획 거부', () => {
+  const p = plan(); delete p.rewritten_lines;
+  assert.ok(Ai.checkPlan(p, base(), 'a'));
+});
+test('요청: 재시도 때 지난 문제를 함께 보낸다', () => {
+  const { init } = Ai.buildRequest({ apiKey: 'k', model: Ai.DEFAULT_MODEL, state: base(), noteId: 'a', request: 'x', problem: '없어진 금액 1개: 3200' });
+  const sent = JSON.parse(init.body);
+  assert.strictEqual(sent.stream, true);
+  assert.ok(sent.messages[0].content.includes('없어진 금액 1개: 3200'));
+});
+
+// 스트리밍
+const sse = chunks => new Response(new ReadableStream({ start(c) { const e = new TextEncoder(); chunks.forEach(x => c.enqueue(e.encode(x))); c.close(); } }));
+const events = list => list.map(e => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join('');
+const pending = [];
+const atest = (name, fn) => pending.push(fn().then(() => { passed++; }, e => { console.error('FAIL ' + name + '\n' + e.stack); process.exitCode = 1; }));
+const stream = [
+  { type: 'message_start', message: {} },
+  { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } },
+  { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'x' } },
+  { type: 'content_block_stop', index: 0 },
+  { type: 'ping' },
+  { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } },
+  { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: '{"order":' } },
+  { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: '[2,"한글"]}' } },
+  { type: 'content_block_stop', index: 1 },
+  { type: 'message_delta', delta: { stop_reason: 'end_turn' } },
+  { type: 'message_stop' }
+];
+atest('스트림: 글 블록을 모으고 진행량을 알린다', async () => {
+  const seen = [];
+  const data = await Ai.readStream(sse([events(stream)]), n => seen.push(n));
+  assert.deepStrictEqual(Ai.readResponse(200, data), { order: [2, '한글'] });
+  assert.strictEqual(seen[seen.length - 1], '{"order":[2,"한글"]}'.length);
+});
+atest('스트림: 한글이 조각 경계에서 잘려도 온전하다', async () => {
+  const bytes = new TextEncoder().encode(events(stream));
+  const cut = bytes.indexOf(0xed) + 1; // '한'의 첫 바이트 바로 뒤
+  const r = new Response(new ReadableStream({ start(c) { c.enqueue(bytes.slice(0, cut)); c.enqueue(bytes.slice(cut)); c.close(); } }));
+  assert.deepStrictEqual(Ai.readResponse(200, await Ai.readStream(r)), { order: [2, '한글'] });
+});
+atest('스트림: 도중의 혼잡 오류', async () => {
+  await assert.rejects(Ai.readStream(sse([events([{ type: 'error', error: { type: 'overloaded_error', message: 'x' } }])])), e => e instanceof Ai.AiError && e.message.includes('혼잡'));
+});
+atest('스트림: 잘린 답은 읽지 못했다고 알린다', async () => {
+  const cutoff = stream.slice(0, 7);
+  assert.throws(() => Ai.readResponse(200, { stop_reason: null, content: [{ type: 'text', text: '{"order":' }] }), Ai.AiError);
+  assert.ok(await Ai.readStream(sse([events(cutoff)])));
+});
+
+Promise.all(pending).then(() => { if (!process.exitCode) console.log(`${passed} tests passed`); });
