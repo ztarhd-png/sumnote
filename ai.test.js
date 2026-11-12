@@ -133,6 +133,28 @@ test('지운 폴더에 있던 노트는 폴더 없음으로 돌아오고, 직접
   assert.ok(kept.folders.some(f => f.id === 'f2'));
 });
 
+// AI 검색
+test('검색 요청: 모든 노트의 줄과 찾는 내용을 보내고, 빈 줄은 뺀다', () => {
+  const { init } = Ai.buildSearchRequest({ apiKey: 'k', model: Ai.DEFAULT_MODEL, state: base(), query: '빵' });
+  const sent = JSON.parse(init.body);
+  const text = sent.messages[0].content;
+  assert.ok(text.includes('<노트 1: 장보기 (일상)>') && text.includes('<노트 2: 여행 (폴더 없음)>'));
+  assert.ok(text.includes('6\t식빵 4,500\t금액 4500'));
+  assert.ok(!text.includes('(빈 줄)'));
+  assert.ok(text.endsWith('<찾는 내용>\n빵\n</찾는 내용>'));
+  assert.deepStrictEqual(Object.keys(sent.output_config.format.schema.properties), ['summary', 'found']);
+  assert.ok(sent.system.includes('검색 도우미'));
+});
+test('검색 요청: 노트가 너무 많으면 보내지 않는다', () => {
+  const s = base(); s.notes[0].body += '\n' + '가'.repeat(700000);
+  assert.throws(() => Ai.buildSearchRequest({ apiKey: 'k', model: Ai.DEFAULT_MODEL, state: s, query: '빵' }), Ai.AiError);
+});
+test('검색 답: 없는 노트·줄과 겹치는 줄은 버린다', () => {
+  const r = Ai.checkSearch({ summary: '빵 1줄', found: [{ note: 1, line: 6, reason: '빵' }, { note: 1, line: 6, reason: '또' }, { note: 3, line: 1, reason: '' }, { note: 2, line: 9, reason: '' }, { note: 2, line: 1, reason: '노트' }, { note: 1.5, line: 2, reason: '' }] }, base());
+  assert.deepStrictEqual(r, { summary: '빵 1줄', hits: [{ noteId: 'a', index: 5, raw: '식빵 4,500', reason: '빵' }, { noteId: 'b', index: 0, raw: '여행', reason: '노트' }] });
+  assert.throws(() => Ai.checkSearch({ summary: '' }, base()), Ai.AiError);
+});
+
 const bad = (name, p) => test('거부: ' + name, () => assert.ok(Ai.checkPlan(p, base(), 'a')));
 test('올바른 계획은 통과', () => assert.strictEqual(Ai.checkPlan(plan(), base(), 'a'), null));
 bad('줄 누락', plan({ order: [2, 3, 4, 5] }));

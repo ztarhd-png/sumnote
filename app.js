@@ -7,6 +7,7 @@
   const id = () => globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2);
   const now = new Date().toISOString();
   let state, storageBroken = false, currentNote = null, query = '', namingAction, deleteAction, toastTimer;
+  let searchAi = null, searchRun = null; // AI 검색 결과(또는 진행 중 표시)와 그 요청
   function validData(data) {
     return data && data.version === 1 && Array.isArray(data.notes) && Array.isArray(data.folders)
       && data.folders.every(f => f && typeof f.id === 'string' && typeof f.name === 'string' && f.name.trim())
@@ -81,16 +82,8 @@
   }
   function renderTree() {
     const tree = $('tree'); tree.replaceChildren();
-    $('search-summary').hidden = !query;
-    if (query) {
-      const matches = ordered(state.notes.filter(n => (n.title + '\n' + n.body).toLocaleLowerCase().includes(query)));
-      matches.forEach(n => tree.append(noteRow(n, true)));
-      if (!matches.length) tree.append(element('p', 'tree-empty', '일치하는 노트가 없어요.'));
-      let matchingTotal = 0, count = 0;
-      for (const n of state.notes) for (const l of SumParser.parseNote(n.body).lines) if (l.raw.toLocaleLowerCase().includes(query)) { count++; if (l.type === 'value') matchingTotal += l.value; }
-      $('search-summary').textContent = `노트 ${matches.length}개 · 일치하는 줄 ${count}개 · 합계 ${fmt(matchingTotal)}원`;
-      return;
-    }
+    $('search-summary').hidden = !query && !searchAi;
+    if (query || searchAi) { renderSearch(tree); return; }
     const groups = state.folders.map(f => ({ key: f.id, name: f.name, folder: f }));
     if (state.notes.some(n => !n.folderId)) groups.push({ key: '', name: '폴더 없음', folder: null });
     for (const g of groups) {
@@ -124,6 +117,66 @@
     }
     if (!groups.length) tree.append(element('p', 'tree-empty', '+ 버튼으로 폴더를 만들어 보세요.'));
     justOpened = null;
+  }
+  // 검색 결과: 노트마다 맞는 줄을 보여 주고, 줄을 누르면 그 노트의 그 줄로 간다.
+  const SEARCH_LINES_PER_NOTE = 30;
+  function hitRow(note, index, raw, ranges, reason) {
+    const row = element('button', 'tree-hit'), text = element('span', 'tree-hit-text');
+    let at = 0;
+    for (const [a, b] of ranges || []) { if (a > at) text.append(raw.slice(at, a)); text.append(element('mark', '', raw.slice(a, b))); at = b; }
+    text.append(raw.slice(at));
+    row.append(text);
+    if (reason) row.append(element('small', '', reason));
+    row.onclick = () => { openNote(note.id, true); revealLine(index); };
+    return row;
+  }
+  function revealLine(index) {
+    requestAnimationFrame(() => {
+      const row = $('note-ink').children[index]; if (!row) return;
+      row.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      row.classList.remove('ink-flash'); void row.offsetWidth; row.classList.add('ink-flash');
+    });
+  }
+  function renderSearch(tree) {
+    const summary = $('search-summary');
+    if (searchAi?.running) { summary.textContent = 'AI가 모든 노트를 살펴보는 중이에요…'; return; }
+    if (searchAi?.hits) {
+      // AI가 고른 순서대로, 노트별로 묶는다. 그 사이 줄이 움직였으면 같은 글자의 줄을 다시 찾는다.
+      const groups = new Map();
+      for (const h of searchAi.hits) {
+        const n = state.notes.find(x => x.id === h.noteId); if (!n) continue;
+        const lines = n.body.split('\n');
+        const index = lines[h.index] === h.raw ? h.index : lines.indexOf(h.raw);
+        if (index < 0) continue;
+        if (!groups.has(n)) groups.set(n, []);
+        if (index > 0) groups.get(n).push({ ...h, index });
+      }
+      let total = 0, count = 0;
+      if (searchAi.summary) tree.append(element('p', 'search-note', searchAi.summary));
+      for (const [n, hits] of groups) {
+        tree.append(noteRow(n, true));
+        const parsed = SumParser.parseNote(n.body).lines;
+        for (const h of hits) { count++; if (parsed[h.index]?.type === 'value') total += parsed[h.index].value; tree.append(hitRow(n, h.index, h.raw, null, h.reason)); }
+      }
+      if (!groups.size) tree.append(element('p', 'tree-empty', '관련된 내용을 찾지 못했어요.'));
+      summary.textContent = `AI 검색 · 노트 ${groups.size}개 · 줄 ${count}개 · 합계 ${fmt(total)}원 · 비용 ${searchAi.cost}`;
+      return;
+    }
+    if (searchAi?.error) tree.append(element('p', 'search-note search-error', searchAi.error));
+    if (!query) { summary.hidden = true; return; }
+    const results = SumSearch.findLines(state, query);
+    const notes = ordered(results.map(r => state.notes.find(n => n.id === r.noteId)));
+    let total = 0, count = 0;
+    for (const n of notes) {
+      const { hits } = results.find(r => r.noteId === n.id);
+      tree.append(noteRow(n, true));
+      hits.slice(0, SEARCH_LINES_PER_NOTE).forEach(h => tree.append(hitRow(n, h.index, h.raw, SumSearch.marks(h.raw, query))));
+      if (hits.length > SEARCH_LINES_PER_NOTE) tree.append(element('p', 'tree-more', `외 ${hits.length - SEARCH_LINES_PER_NOTE}줄`));
+      count += hits.length;
+      for (const h of hits) if (h.value !== null) total += h.value;
+    }
+    if (!notes.length) tree.append(element('p', 'tree-empty', '일치하는 내용이 없어요. 뜻으로 찾으려면 AI 검색을 눌러 보세요.'));
+    summary.textContent = `노트 ${notes.length}개 · 줄 ${count}개 · 합계 ${fmt(total)}원`;
   }
   function renderLines() {
     const n = active(); if (!n) return;
@@ -198,7 +251,7 @@
   function newNote(inFolder) {
     const folderId = typeof inFolder === 'string' ? inFolder || null : active()?.folderId || null;
     const n = { id: id(), title: '', body: '', folderId, updatedAt: new Date().toISOString() };
-    state.notes.push(n); query = ''; $('search').value = ''; persist(); openNote(n.id, true); $('note-body').focus();
+    state.notes.push(n); query = ''; $('search').value = ''; stopSearchAi(); persist(); openNote(n.id, true); $('note-body').focus();
   }
   $('name-form').onsubmit = event => {
     event.preventDefault(); const name = $('name-input').value.trim();
@@ -313,7 +366,12 @@
   }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
   addEventListener('pagehide', flushSave);
-  $('search').oninput = () => { query = $('search').value.trim().toLocaleLowerCase(); renderTree(); };
+  $('search').oninput = () => { stopSearchAi(); query = $('search').value.trim(); renderTree(); };
+  $('search-plain').onclick = () => {
+    stopSearchAi(); query = $('search').value.trim();
+    if (!query) { toast('찾을 말을 적어 주세요.'); $('search').focus(); return; }
+    $('search').blur(); renderTree();
+  };
   $('menu-toggle').onclick = () => { const open = $('sidebar').classList.toggle('open'); $('menu-toggle').setAttribute('aria-expanded', String(open)); };
   // 바깥을 누르면 메뉴를 닫는다. 폴더를 누르면 나무를 다시 그려 누른 요소가 문서에서 빠지므로,
   // contains() 대신 이벤트가 지나온 경로(composedPath)로 판단한다.
@@ -405,6 +463,44 @@
     $('ai-forget').hidden = !aiConfig.key;
     aiShow('ai-key-form');
   }
+  // AI 검색: 버튼을 눌렀을 때만 보낸다. 결과는 사이드바에 단순 검색과 같은 모양으로 보여 준다.
+  let aiKeyForSearch = false;
+  function stopSearchAi() {
+    if (searchRun) { searchRun.abort(); searchRun = null; }
+    $('search-ai').textContent = 'AI 검색';
+    searchAi = null;
+  }
+  async function runSearchAi(text) {
+    flushSave(); stopSearchAi();
+    const controller = new AbortController(); searchRun = controller;
+    query = text; searchAi = { running: true };
+    $('search-ai').textContent = '멈추기'; $('search').blur(); renderTree();
+    let spent = 0, timer, timedOut = false;
+    const kick = () => { clearTimeout(timer); timer = setTimeout(() => { timedOut = true; controller.abort(); }, 120000); };
+    try {
+      kick();
+      const { url, init } = AiPlan.buildSearchRequest({ apiKey: aiConfig.key, model: aiConfig.model, state, query: text });
+      const response = await fetch(url, { ...init, signal: controller.signal });
+      const data = response.status === 200 ? await AiPlan.readStream(response, kick) : await response.json().catch(() => null);
+      if (data?.usage) spent += AiPlan.costWon(aiConfig.model, data.usage);
+      const result = AiPlan.checkSearch(AiPlan.readResponse(response.status, data), state);
+      if (searchRun === controller) searchAi = { ...result, cost: AiPlan.costLabel(spent) };
+    } catch (error) {
+      if (searchRun !== controller) return;
+      const reason = timedOut ? '시간이 너무 오래 걸려 멈췄어요. 다시 해 주세요.' : error instanceof AiPlan.AiError ? error.message : '인터넷에 연결되어 있는지 확인해 주세요.';
+      searchAi = { error: spent ? `AI 검색 실패: ${reason} (이번 비용 ${AiPlan.costLabel(spent)})` : `AI 검색 실패: ${reason}` };
+    } finally {
+      clearTimeout(timer);
+      if (searchRun === controller) { searchRun = null; $('search-ai').textContent = 'AI 검색'; renderTree(); }
+    }
+  }
+  $('search-ai').onclick = () => {
+    if (searchRun) { stopSearchAi(); renderTree(); return; }
+    const text = $('search').value.trim();
+    if (!text) { toast('찾을 내용을 적어 주세요.'); $('search').focus(); return; }
+    if (!aiConfig.key) { aiKeyForSearch = true; aiError(''); aiKeyPanel(); $('ai-dialog').showModal(); return; }
+    runSearchAi(text);
+  };
   function saveAiConfig() { try { localStorage.setItem(AI_KEY, JSON.stringify(aiConfig)); return true; } catch (_) { return false; } }
   $('ai-model').replaceChildren(...AiPlan.MODELS.map(m => { const o = element('option', '', m.label); o.value = m.id; return o; }));
   $('ai-open').onclick = () => {
@@ -421,6 +517,7 @@
     if (!key) { aiError('API 키를 넣어 주세요.'); return; }
     aiConfig = { key, model: $('ai-model').value, picked: true };
     if (!saveAiConfig()) { aiError('키를 저장하지 못했어요. 브라우저 저장소를 확인해 주세요.'); return; }
+    if (aiKeyForSearch) { aiKeyForSearch = false; $('ai-dialog').close(); $('search-ai').click(); return; }
     aiError(''); aiAsk();
   };
   $('ai-forget').onclick = () => {
@@ -516,7 +613,7 @@
   document.querySelectorAll('[data-ask]').forEach(b => { b.onclick = () => { $('ai-request').value = b.dataset.ask; runAi(b.dataset.ask); }; });
   $('ai-cancel').onclick = () => { aiRun?.controller.abort(); aiAsk(); };
   $('ai-again').onclick = () => { aiPending = null; aiAsk(); $('ai-request').focus(); };
-  $('ai-dialog').addEventListener('close', () => { aiRun?.controller.abort(); aiPending = null; aiError(''); $('ai-request').value = ''; $('ai-request').style.height = ''; });
+  $('ai-dialog').addEventListener('close', () => { aiKeyForSearch = false; aiRun?.controller.abort(); aiPending = null; aiError(''); $('ai-request').value = ''; $('ai-request').style.height = ''; });
   function aiRollback(index) {
     const previous = state, next = AiPlan.rollbackState(state, aiHistory.slice(0, index + 1));
     if (!validData(next)) { toast('되돌리지 못했어요. 기록을 읽을 수 없어요.'); return; }
