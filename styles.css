@@ -484,3 +484,8 @@ dialog p b { color: var(--ink); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
 }
+
+/* GitHub 동기화 */
+.sync-steps { margin: 0 0 14px; padding-left: 1.3em; display: grid; gap: 6px; font-size: 14px; line-height: 1.5; }
+.sync-steps a { font-weight: 600; }
+.sync-brief { margin-left: 6px; font-size: 12px; opacity: .7; }

@@ -8,6 +8,9 @@
   const now = new Date().toISOString();
   let state, storageBroken = false, currentNote = null, query = '', namingAction, deleteAction, toastTimer;
   let searchAi = null, searchRun = null; // AI 검색 결과(또는 진행 중 표시)와 그 요청
+  const SYNC_KEY = 'sumnote.sync';
+  let syncCfg = {}, syncTimer = null, syncing = false, syncAgain = false, syncWarned = false;
+  try { syncCfg = JSON.parse(localStorage.getItem(SYNC_KEY)) || {}; } catch (_) {}
   function validData(data) {
     return data && data.version === 1 && Array.isArray(data.notes) && Array.isArray(data.folders)
       && data.folders.every(f => f && typeof f.id === 'string' && typeof f.name === 'string' && f.name.trim())
@@ -49,11 +52,11 @@
     if (action) { const b = element('button', 'toast-action', action.label); b.onclick = () => { box.hidden = true; action.run(); }; box.append(b); }
     box.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { box.hidden = true; }, action ? 9000 : 3500);
   }
-  function persist() {
+  function persist(fromSync) {
     // 저장 상태는 문제가 있을 때만 위쪽 막대에 보인다.
     const warn = text => { $('save-status').textContent = text; $('save-status').hidden = false; };
     if (storageBroken) { warn('저장 확인 필요'); return false; }
-    try { localStorage.setItem(KEY, JSON.stringify(state)); if (!$('save-status').hidden) $('save-status').hidden = true; return true; }
+    try { localStorage.setItem(KEY, JSON.stringify(state)); if (!$('save-status').hidden) $('save-status').hidden = true; if (!fromSync) scheduleSync(); return true; }
     catch (_) { warn('저장 공간 부족'); toast('저장하지 못했어요. JSON 백업으로 노트를 보관해 주세요.'); return false; }
   }
   function active() { return state.notes.find(n => n.id === currentNote); }
@@ -666,8 +669,113 @@
     $('ai-dialog').close();
     toast('정리했어요.', { label: '되돌리기', run: () => askRollback(0, false) });
   };
+  // GitHub 동기화(sync.js): 본인의 비공개 저장소에 노트 전체를 둔다. 토큰은 노트 데이터와 따로 저장해 백업에 들어가지 않는다.
+  // 고치면 몇 초 뒤에 올리고, 앱을 열거나 다시 볼 때 받는다. 쓰는 중에는 건드리지 않는다.
+  function saveSyncCfg() { try { if (syncCfg.token) localStorage.setItem(SYNC_KEY, JSON.stringify(syncCfg)); else localStorage.removeItem(SYNC_KEY); } catch (_) {} }
+  function scheduleSync(delay) { if (!syncCfg.token) return; clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, delay ?? 4000); }
+  const emptyish = () => !state.notes.length || onlySamples();
+  function applySynced(next) {
+    const previous = state; state = next;
+    if (!persist(true)) { state = previous; return false; }
+    if (!active()) currentNote = latest();
+    const n = active(); if (n) openOnly(n.folderId || '');
+    saveUi(); renderTree(); renderEditor();
+    return true;
+  }
+  async function syncNow(manual) {
+    if (!syncCfg.token || storageBroken) return;
+    if (syncing) { syncAgain = true; return; }
+    clearTimeout(syncTimer); syncTimer = null;
+    if (editing) return; // 쓰기를 마치면(저장) 다시 예약된다.
+    syncing = true; syncShow();
+    try {
+      for (let attempt = 0; ; attempt++) {
+        flushSave();
+        const localText = JSON.stringify(state);
+        const remote = await SumSync.readFile(syncCfg, fetch);
+        // 받는 사이에 쓰기 시작했으면 이번에는 손대지 않는다.
+        if (editing || JSON.stringify(state) !== localText) { syncAgain = true; return; }
+        let remoteState = null;
+        if (remote) {
+          try { remoteState = JSON.parse(remote.text); } catch (_) {}
+          if (!validData(remoteState)) throw new SumSync.SyncError(`GitHub의 ${SumSync.FILE}이 숨노트 데이터가 아니에요. 저장소의 파일을 확인해 주세요.`, 'bad');
+          titleFirst(remoteState.notes);
+        }
+        let next = state, conflicts = 0;
+        if (remote && remote.sha !== syncCfg.sha) {
+          // 처음 연결한 기기에 샘플뿐이면 GitHub의 노트로 바꾼다. 아니면 합친다(글은 사라지지 않는다).
+          if (!syncCfg.base && emptyish()) next = remoteState;
+          else ({ state: next, conflicts } = SumSync.merge(syncCfg.base, state, remoteState, id));
+        }
+        const nextText = JSON.stringify(next);
+        const pulled = nextText !== localText;
+        if (pulled && !applySynced(next)) throw new SumSync.SyncError('받은 노트를 저장하지 못했어요. 저장 공간을 확인해 주세요.', 'fail');
+        let sha = remote ? remote.sha : null;
+        // 샘플만 있는 새 기기는 올리지 않는다(다른 기기의 노트에 샘플이 섞이지 않게).
+        const push = remote ? nextText !== JSON.stringify(remoteState) : !emptyish();
+        if (push) {
+          try { sha = await SumSync.writeFile(syncCfg, JSON.stringify(next, null, 1), sha, fetch); }
+          catch (error) { if (error.kind === 'conflict' && attempt < 3) continue; throw error; }
+        }
+        if (push || remote) { syncCfg.sha = sha; syncCfg.base = SumSync.marksOf(next); }
+        syncCfg.at = new Date().toISOString(); syncCfg.error = ''; saveSyncCfg();
+        if (conflicts) toast(`두 기기에서 같은 노트를 다르게 고쳐, 이 기기의 것 ${conflicts}개를 ‘(충돌 사본)’으로 남겼어요.`);
+        else if (pulled) toast('다른 기기에서 고친 내용을 받았어요.');
+        return;
+      }
+    } catch (error) {
+      const message = error instanceof SumSync.SyncError ? error.message : '동기화하지 못했어요. 잠시 뒤에 다시 해 주세요.';
+      if (error.kind === 'offline') { if (manual) syncError(message); return; }
+      syncCfg.error = message; saveSyncCfg();
+      if (!manual && !syncWarned) { syncWarned = true; toast('GitHub 동기화를 확인해 주세요. ' + message); }
+    } finally {
+      syncing = false; syncShow();
+      if (syncAgain) { syncAgain = false; scheduleSync(1000); }
+    }
+  }
+  function syncError(message) { $('sync-error').textContent = message || ''; $('sync-error').hidden = !message; }
+  function syncShow() {
+    const on = !!syncCfg.token;
+    $('sync-brief').textContent = on ? (syncCfg.error ? '확인 필요' : '켜짐') : '꺼짐';
+    $('sync-form').hidden = on; $('sync-on').hidden = !on;
+    if (!on) return;
+    $('sync-where').textContent = `${syncCfg.owner}/${syncCfg.repo} 저장소에 맞추고 있어요.`;
+    $('sync-when').textContent = syncing ? '맞추는 중…' : syncCfg.at ? `마지막으로 맞춘 때: ${aiTime(syncCfg.at)}` : '아직 맞추지 않았어요.';
+    $('sync-now').disabled = syncing;
+    if (syncCfg.error) syncError(syncCfg.error);
+  }
+  // 'sumnote-data', '아이디/sumnote-data', 저장소 주소 모두 받는다.
+  function repoInput(text) {
+    const parts = text.trim().replace(/^https?:\/\/(www\.)?github\.com\//i, '').replace(/\.git$/i, '').split('/').filter(Boolean);
+    return parts.length >= 2 ? { owner: parts[0], repo: parts[1] } : { owner: '', repo: parts[0] || '' };
+  }
+  $('sync-open').onclick = () => { syncError(''); syncShow(); $('sync-dialog').showModal(); };
+  $('sync-form').onsubmit = async event => {
+    event.preventDefault();
+    const token = $('sync-token').value.trim(), where = repoInput($('sync-repo').value);
+    if (!where.repo) { syncError('저장소 이름을 적어 주세요.'); return; }
+    if (!token) { syncError('토큰을 붙여 넣어 주세요.'); return; }
+    const button = $('sync-connect'); button.disabled = true; button.textContent = '확인 중…'; syncError('');
+    try {
+      const owner = where.owner || await SumSync.whoAmI(token, fetch);
+      const found = await SumSync.checkRepo({ owner, repo: where.repo, token }, fetch);
+      syncCfg = { owner: found.owner, repo: found.repo, token };
+      saveSyncCfg(); $('sync-token').value = ''; syncWarned = false;
+      await syncNow(true);
+      syncShow();
+      if (!syncCfg.error && syncCfg.at) toast('GitHub과 연결했어요.');
+    } catch (error) { syncError(error instanceof SumSync.SyncError ? error.message : '연결하지 못했어요. 잠시 뒤에 다시 해 주세요.'); }
+    finally { button.disabled = false; button.textContent = '연결'; }
+  };
+  $('sync-now').onclick = async () => { syncError(''); syncCfg.error = ''; await syncNow(true); syncShow(); };
+  $('sync-off').onclick = () => confirmDelete('연결을 끊을까요?', '이 기기에서 토큰만 지워요. 이 기기의 노트와 GitHub의 파일은 그대로 남아요.', () => {
+    clearTimeout(syncTimer); syncCfg = {}; saveSyncCfg(); syncError(''); syncShow();
+  }, '연결 끊기');
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow(); else if (syncTimer) syncNow(); });
+  addEventListener('online', () => syncNow());
   openNote(state.notes.some(n => n.id === ui.lastNote) ? ui.lastNote : latest());
   if (storageBroken) { $('save-status').textContent = '저장 확인 필요'; $('save-status').hidden = false; toast('기존 데이터를 읽지 못했어요. 원본 보호를 위해 자동 저장을 멈췄어요.'); } else persist();
+  syncShow(); syncNow();
   // 저장소 공간이 부족할 때 브라우저가 이 앱의 데이터를 먼저 지우지 않도록 요청한다(지원하는 브라우저만).
   navigator.storage?.persist?.().catch(() => {});
   // 업데이트: 새 버전은 뒤에서 받아 두기만 하고, 사용자가 '업데이트'를 누를 때 바꾼다.
