@@ -9,7 +9,7 @@
   let state, storageBroken = false, currentNote = null, query = '', namingAction, deleteAction, toastTimer;
   let searchAi = null, searchRun = null; // AI 검색 결과(또는 진행 중 표시)와 그 요청
   const SYNC_KEY = 'sumnote.sync';
-  let syncCfg = {}, syncTimer = null, syncing = false, syncAgain = false, syncWarned = false;
+  let syncCfg = {}, syncTimer = null, syncing = false, syncAgain = false, syncWarned = false, syncChoice = null;
   try { syncCfg = JSON.parse(localStorage.getItem(SYNC_KEY)) || {}; } catch (_) {}
   function validData(data) {
     return data && data.version === 1 && Array.isArray(data.notes) && Array.isArray(data.folders)
@@ -704,7 +704,9 @@
         let next = state, conflicts = 0;
         if (remote && remote.sha !== syncCfg.sha) {
           // 처음 연결한 기기에 샘플뿐이면 GitHub의 노트로 바꾼다. 아니면 합친다(글은 사라지지 않는다).
-          if (!syncCfg.base && emptyish()) next = remoteState;
+          // 처음 연결하는 기기에 노트가 따로 있으면, 합칠지 GitHub 노트로 바꿀지 먼저 묻는다.
+          if (!syncCfg.base && (emptyish() || syncCfg.first === 'remote')) next = remoteState;
+          else if (!syncCfg.base && !syncCfg.first && localText !== JSON.stringify(remoteState)) { askFirst(remoteState); return; }
           else ({ state: next, conflicts } = SumSync.merge(syncCfg.base, state, remoteState, id));
         }
         const nextText = JSON.stringify(next);
@@ -718,7 +720,7 @@
           catch (error) { if (error.kind === 'conflict' && attempt < 3) continue; throw error; }
         }
         if (push || remote) { syncCfg.sha = sha; syncCfg.base = SumSync.marksOf(next); }
-        syncCfg.at = new Date().toISOString(); syncCfg.error = ''; saveSyncCfg();
+        syncCfg.at = new Date().toISOString(); syncCfg.error = ''; delete syncCfg.first; syncChoice = null; saveSyncCfg();
         if (conflicts) toast(`두 기기에서 같은 노트를 다르게 고쳐, 이 기기의 것 ${conflicts}개를 ‘(충돌 사본)’으로 남겼어요.`);
         else if (pulled) toast('다른 기기에서 고친 내용을 받았어요.');
         return;
@@ -734,11 +736,17 @@
     }
   }
   function syncError(message) { $('sync-error').textContent = message || ''; $('sync-error').hidden = !message; }
+  function askFirst(remoteState) {
+    syncChoice = { local: state.notes.length, remote: remoteState.notes.length };
+    syncShow();
+    if (!$('sync-dialog').open) { syncError(''); $('sync-dialog').showModal(); }
+  }
   function syncShow() {
-    const on = !!syncCfg.token;
-    $('sync-brief').textContent = on ? (syncCfg.error ? '확인 필요' : '켜짐') : '꺼짐';
-    $('sync-form').hidden = on; $('sync-on').hidden = !on;
-    if (!on) return;
+    const on = !!syncCfg.token, choosing = on && !!syncChoice;
+    $('sync-brief').textContent = on ? (choosing ? '고를 것 있음' : syncCfg.error ? '확인 필요' : '켜짐') : '꺼짐';
+    $('sync-form').hidden = on; $('sync-on').hidden = !on || choosing; $('sync-choose').hidden = !choosing;
+    if (choosing) $('sync-choose-text').textContent = `이 기기에 노트 ${syncChoice.local}개, GitHub에 노트 ${syncChoice.remote}개가 있어요. 처음 맞추기 전에 이 기기의 노트를 어떻게 할까요?`;
+    if (!on || choosing) return;
     $('sync-where').textContent = `${syncCfg.owner}/${syncCfg.repo} 저장소에 맞추고 있어요.`;
     $('sync-when').textContent = syncing ? '맞추는 중…' : syncCfg.at ? `마지막으로 맞춘 때: ${aiTime(syncCfg.at)}` : '아직 맞추지 않았어요.';
     $('sync-now').disabled = syncing;
@@ -767,9 +775,12 @@
     } catch (error) { syncError(error instanceof SumSync.SyncError ? error.message : '연결하지 못했어요. 잠시 뒤에 다시 해 주세요.'); }
     finally { button.disabled = false; button.textContent = '연결'; }
   };
+  const chooseFirst = async how => { syncCfg.first = how; syncChoice = null; saveSyncCfg(); await syncNow(true); syncShow(); if (!syncCfg.error && syncCfg.at && how === 'remote') toast('GitHub의 노트로 바꿨어요.'); }; // 합치면 동기화가 알려 준다(충돌 사본 포함)
+  $('sync-take').onclick = () => chooseFirst('remote');
+  $('sync-merge').onclick = () => chooseFirst('merge');
   $('sync-now').onclick = async () => { syncError(''); syncCfg.error = ''; await syncNow(true); syncShow(); };
   $('sync-off').onclick = () => confirmDelete('연결을 끊을까요?', '이 기기에서 토큰만 지워요. 이 기기의 노트와 GitHub의 파일은 그대로 남아요.', () => {
-    clearTimeout(syncTimer); syncCfg = {}; saveSyncCfg(); syncError(''); syncShow();
+    clearTimeout(syncTimer); syncCfg = {}; syncChoice = null; saveSyncCfg(); syncError(''); syncShow();
   }, '연결 끊기');
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow(); else if (syncTimer) syncNow(); });
   addEventListener('online', () => syncNow());

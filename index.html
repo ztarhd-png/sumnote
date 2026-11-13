@@ -99,6 +99,10 @@
 <label class="field"><span>토큰</span><input id="sync-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_"></label>
 <p class="small">토큰은 이 기기에만 저장되고 백업 파일에도 들어가지 않아요. 노트가 있는 기기에서 먼저 연결하세요. 다른 기기에서는 토큰을 하나 더 만들어 같은 저장소에 연결하면 돼요.</p>
 <div class="dialog-buttons"><button type="submit" id="sync-connect" class="primary">연결</button></div></form>
+<div id="sync-choose" hidden>
+<p id="sync-choose-text"></p>
+<p class="small"><b>GitHub 노트로 바꾸기</b>를 고르면 이 기기에만 있던 노트는 지워져요. <b>합치기</b>를 고르면 두 쪽 노트가 모두 남아요.</p>
+<div class="dialog-buttons"><button type="button" id="sync-merge" class="outline-button">합치기</button><button type="button" id="sync-take" class="primary">GitHub 노트로 바꾸기</button></div></div>
 <div id="sync-on" hidden>
 <p id="sync-where"></p><p id="sync-when" class="small"></p>
 <p class="small">고치면 몇 초 뒤에 올리고, 앱을 열 때마다 받아요. 두 기기에서 같은 노트를 다르게 고쳤으면 이 기기의 것을 ‘(충돌 사본)’으로 남겨요. GitHub에 지난 모습이 모두 남아 있어 예전 상태도 찾을 수 있어요.</p>
